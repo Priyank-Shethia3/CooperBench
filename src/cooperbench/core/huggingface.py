@@ -12,7 +12,7 @@ from pathlib import Path
 
 from huggingface_hub import HfApi
 
-from cooperbench.core.paths import CACHE_DIR, LOGS_DIR, get_cache_dir, get_cache_path, get_log_path
+from cooperbench.core.paths import LOGS_DIR, get_cache_dir, get_cache_path, get_log_path
 
 REPO_NAME = "CodeConflict/experiments"
 API = HfApi()
@@ -20,7 +20,7 @@ API = HfApi()
 
 def download_file_from_hf(file_path: Path, location: str) -> Path:
     """Download or locate a file based on the specified location.
-    
+
     Args:
         file_path: Relative path to the file
         location: One of 'logs', 'cache', or 'hf'
@@ -35,12 +35,12 @@ def download_file_from_hf(file_path: Path, location: str) -> Path:
         log_patch_path = get_log_path(file_path)
         assert log_patch_path.exists(), f"Logs path does not exist: {log_patch_path}"
         return log_patch_path
-    
+
     cache_file_path = get_cache_path(file_path)
     if location == "cache":
         if cache_file_path.exists():
             return cache_file_path
-    
+
     API.hf_hub_download(
         repo_id=REPO_NAME,
         filename=str(file_path),

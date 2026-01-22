@@ -124,7 +124,7 @@ class BaseAgent(ABC):
 
     async def run_iteration(self) -> tuple[bool, str]:
         """Run a single planning iteration.
-        
+
         Returns:
             Tuple of (should_continue, plan_if_complete)
         """
@@ -179,10 +179,10 @@ class BaseAgent(ABC):
 
     async def run(self, task_description: str) -> str:
         """Run the planning process.
-        
+
         Args:
             task_description: The initial task description
-            
+
         Returns:
             The final plan string
         """

@@ -6,8 +6,8 @@ experiments involving AI agents collaborating on software engineering tasks.
 """
 
 from cooperbench.__about__ import __version__
-from cooperbench.core.settings import BenchSetting
 from cooperbench.core.interface import FileInterface
+from cooperbench.core.settings import BenchSetting
 
 __all__ = [
     "__version__",

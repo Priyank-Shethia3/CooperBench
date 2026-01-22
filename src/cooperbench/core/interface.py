@@ -11,7 +11,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from cooperbench.core.settings import BenchSetting
+from cooperbench.core.git import (
+    get_base_commit,
+    make_dirs,
+    setup_agent_workspace,
+    setup_base_repo,
+)
+from cooperbench.core.huggingface import download_file_from_hf, upload_file_to_hf
+from cooperbench.core.merge import merge
+from cooperbench.core.patch import apply_patch
 from cooperbench.core.paths import (
     _get_default_dir_structure,
     get_agent_workspace_path,
@@ -26,20 +34,12 @@ from cooperbench.core.paths import (
     get_test_script_path,
     get_tests_patch_path,
 )
-from cooperbench.core.huggingface import download_file_from_hf, upload_file_to_hf
-from cooperbench.core.merge import merge
-from cooperbench.core.patch import apply_patch
-from cooperbench.core.git import (
-    get_base_commit,
-    make_dirs,
-    setup_agent_workspace,
-    setup_base_repo,
-)
+from cooperbench.core.settings import BenchSetting
 
 
 class FileInterface:
     """Main file interface for managing experiment files and state.
-    
+
     Handles all loading and saving of files, and stores task details.
     Supports different experiment settings: single, solo, coop, coop_ablation.
     """
@@ -98,13 +98,11 @@ class FileInterface:
             feature2_id=feature2_id,
             model2=model2,
         )
-        
+
         assert feature1_id != feature2_id, (
             f"feature1_id and feature2_id cannot be the same: {feature1_id} and {feature2_id}"
         )
-        assert setting == BenchSetting.SINGLE or feature2_id, (
-            "feature2_id should be set for non-single settings"
-        )
+        assert setting == BenchSetting.SINGLE or feature2_id, "feature2_id should be set for non-single settings"
 
         self.base_repo_path: Path
         self.base_commit: str
@@ -147,7 +145,7 @@ class FileInterface:
         check_for_conflicts: bool = True,
     ) -> None:
         """Create new agent workspaces and initialize the repository.
-        
+
         Args:
             setup_both_agent_workspaces: Also create workspace for second feature (for eval)
             check_for_conflicts: Check if golden features have merge conflicts

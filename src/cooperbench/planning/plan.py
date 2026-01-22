@@ -14,9 +14,9 @@ import asyncio
 from dotenv import load_dotenv
 
 from cooperbench import BenchSetting, FileInterface
+from cooperbench.planning.coop import run_planning as run_coop_planning
 from cooperbench.planning.single import run_planning as run_single_planning
 from cooperbench.planning.solo import run_planning as run_solo_planning
-from cooperbench.planning.coop import run_planning as run_coop_planning
 
 load_dotenv()
 
@@ -96,7 +96,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     setting = BenchSetting(args.setting)
-    
+
     file_interface = FileInterface(
         setting=setting,
         repo_name=args.repo_name,

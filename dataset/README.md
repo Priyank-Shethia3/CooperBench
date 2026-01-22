@@ -20,28 +20,23 @@ dataset/
 └── README.md
 ```
 
-## Statistics
-
-| Metric | Count |
-|--------|-------|
-| Repositories | 12 |
-| Tasks | 30 |
-| Features | 199 |
 
 ## Repositories
 
-- `dottxt_ai_outlines_task` - 3 tasks, 22 features
-- `dspy_task` - 4 tasks, 23 features
-- `go_chi_task` - 3 tasks, 13 features
-- `huggingface_datasets_task` - 3 tasks, 13 features
-- `llama_index_task` - 3 tasks, 16 features
-- `openai_tiktoken_task` - 1 task, 10 features
-- `pallets_click_task` - 3 tasks, 27 features
-- `pallets_jinja_task` - 3 tasks, 30 features
-- `pillow_task` - 3 tasks, 15 features
-- `react_hook_form_task` - 2 tasks, 11 features
-- `samuelcolvin_dirty_equals_task` - 1 task, 9 features
-- `typst` - 1 task, 10 features
+| Directory | Repository | Tasks | Features |
+|-----------|------------|-------|----------|
+| `dottxt_ai_outlines_task` | [dottxt-ai/outlines](https://github.com/dottxt-ai/outlines) | 3 | 22 |
+| `dspy_task` | [stanfordnlp/dspy](https://github.com/stanfordnlp/dspy) | 4 | 23 |
+| `go_chi_task` | [go-chi/chi](https://github.com/go-chi/chi) | 3 | 13 |
+| `huggingface_datasets_task` | [huggingface/datasets](https://github.com/huggingface/datasets) | 3 | 13 |
+| `llama_index_task` | [run-llama/llama_index](https://github.com/run-llama/llama_index) | 3 | 16 |
+| `openai_tiktoken_task` | [openai/tiktoken](https://github.com/openai/tiktoken) | 1 | 10 |
+| `pallets_click_task` | [pallets/click](https://github.com/pallets/click) | 3 | 27 |
+| `pallets_jinja_task` | [pallets/jinja](https://github.com/pallets/jinja) | 3 | 30 |
+| `pillow_task` | [python-pillow/Pillow](https://github.com/python-pillow/Pillow) | 3 | 15 |
+| `react_hook_form_task` | [react-hook-form/react-hook-form](https://github.com/react-hook-form/react-hook-form) | 2 | 11 |
+| `samuelcolvin_dirty_equals_task` | [samuelcolvin/dirty-equals](https://github.com/samuelcolvin/dirty-equals) | 1 | 9 |
+| `typst` | [typst/typst](https://github.com/typst/typst) | 1 | 10 |
 
 ## Usage
 

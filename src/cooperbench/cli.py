@@ -27,13 +27,22 @@ def main() -> None:
     # Execute command (placeholder)
     exec_parser = subparsers.add_parser("execute", help="Run execution phase")
     _add_common_args(exec_parser)
-    exec_parser.add_argument("--plan-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load plans from")
+    exec_parser.add_argument(
+        "--plan-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load plans from"
+    )
 
     # Evaluate command
     eval_parser = subparsers.add_parser("evaluate", help="Run evaluation phase")
     _add_common_args(eval_parser)
-    eval_parser.add_argument("--patch-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load patches from")
-    eval_parser.add_argument("--eval-type", default="test", choices=["test", "merge"], help="Evaluation type: test (single/solo) or merge (coop)")
+    eval_parser.add_argument(
+        "--patch-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load patches from"
+    )
+    eval_parser.add_argument(
+        "--eval-type",
+        default="test",
+        choices=["test", "merge"],
+        help="Evaluation type: test (single/solo) or merge (coop)",
+    )
 
     args = parser.parse_args()
 
@@ -52,7 +61,8 @@ def main() -> None:
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     """Add common arguments to a subparser."""
     parser.add_argument(
-        "--setting", "-s",
+        "--setting",
+        "-s",
         required=True,
         choices=["single", "solo", "coop", "coop_ablation"],
         help="Experiment setting mode",
@@ -73,7 +83,7 @@ async def _run_plan(args: argparse.Namespace) -> None:
     from cooperbench.planning import create_plan
 
     setting = BenchSetting(args.setting)
-    
+
     file_interface = FileInterface(
         setting=setting,
         repo_name=args.repo_name,

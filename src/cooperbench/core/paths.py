@@ -37,7 +37,7 @@ def get_cache_path(file_path: Path) -> Path:
 
 def get_task_folder_path(repo_name: str, task_id: int) -> Path:
     """Get the task folder path for a given repository and task ID.
-    
+
     The task folder structure is: dataset/<repo_name>/task<task_id>
     """
     return Path("dataset") / repo_name / f"task{task_id}"
@@ -45,7 +45,7 @@ def get_task_folder_path(repo_name: str, task_id: int) -> Path:
 
 def get_test_script_path(task_folder: Path) -> Path:
     """Get the test script path for a given task folder.
-    
+
     The test script is expected to be run_tests.sh in the task folder.
     """
     test_script = task_folder / "run_tests.sh"
@@ -57,7 +57,7 @@ def get_test_script_path(task_folder: Path) -> Path:
 
 def get_feature_folder_path(task_folder: Path, feature_num: int) -> Path:
     """Get the feature folder path for a given task folder and feature number.
-    
+
     The feature folder structure is: task_folder/feature<feature_num>
     """
     return task_folder / f"feature{feature_num}"
@@ -119,12 +119,12 @@ def get_agent_workspace_path(
     feature2_id: int | None = None,
 ) -> Path:
     """Get the agent workspace path for a given task and feature.
-    
+
     We have a separate workspace per feature combination to avoid conflicts.
     """
     if setting == BenchSetting.SINGLE:
         return task_folder_path / "agent_workspace" / f"{repo_name}_feature{feature1_id}_k{k}"
-    
+
     assert feature2_id is not None, "feature2_id must be provided for non-single settings"
     return task_folder_path / "agent_workspace" / f"{repo_name}_feature{feature1_id}_feature{feature2_id}_k{k}"
 
@@ -140,7 +140,7 @@ def get_container_name(
     """Generate unique docker container name per feature combination."""
     if setting == BenchSetting.SINGLE:
         return f"openhands-app-{repo_name}-{task_id}-feature{feature1_id}_k{k}"
-    
+
     assert feature2_id is not None, "feature2_id must be provided for non-single settings"
     return f"openhands-app-{repo_name}-{task_id}-feature{feature1_id}_feature{feature2_id}_k{k}"
 
@@ -152,12 +152,12 @@ def get_branch_name(
     feature2_id: int | None = None,
 ) -> str:
     """Create unique branch names for git worktrees.
-    
+
     For multi-feature modes we include both feature_ids to avoid conflicts.
     """
     if setting == BenchSetting.SINGLE:
         return f"feature{feature1_id}_k{k}"
-    
+
     assert feature2_id is not None, "feature2_id must be provided for non-single settings"
     return f"feature{feature1_id}_feature{feature2_id}_k{k}"
 
@@ -170,14 +170,14 @@ def _get_default_dir_structure(
     feature2_id: int | None = None,
 ) -> str:
     """Generate a standardized directory structure based on the experiment setting.
-    
+
     Structure:
     - single: single/<repo_name>/task<task_id>/feature<feature1_id>/
     - Multi-feature: <setting>/<repo_name>/task<task_id>/feature<i>_feature<j>/
     """
     if setting == BenchSetting.SINGLE:
         return f"{setting.value}/{repo_name}/task{task_id}/feature{feature1_id}/"
-    
+
     assert feature2_id is not None, "feature2_id must be provided for non-single settings"
     i, j = sorted((feature1_id, feature2_id))
     return f"{setting.value}/{repo_name}/task{task_id}/feature{i}_feature{j}/"
@@ -238,11 +238,11 @@ def get_file_paths(
     model2: str | None = None,
 ) -> dict[str, Path]:
     """Generate all output and eval file paths for a task given a setting.
-    
+
     Returns HF paths (without logs/ or .cache prefix).
     """
     model1_clean = clean_model_name(model1)
-    
+
     if setting == BenchSetting.SINGLE:
         files = {
             "plan1": f"plan_{model1_clean}_k{k}_feature{feature1_id}.md",
@@ -279,7 +279,7 @@ def get_file_paths(
         }
     else:
         raise ValueError("model2 must be provided for non-single settings")
-    
+
     return _get_paths_for_files(files, setting, repo_name, task_id, feature1_id, feature2_id)
 
 

@@ -343,8 +343,18 @@ class GrepSearchTool(BaseTool):
     def _is_text_file(self, file_path: Path) -> bool:
         """Check if file is likely a text file."""
         binary_extensions = {
-            ".jpg", ".jpeg", ".png", ".gif", ".pdf", ".zip",
-            ".exe", ".dll", ".so", ".dylib", ".bin", ".pyc",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".pdf",
+            ".zip",
+            ".exe",
+            ".dll",
+            ".so",
+            ".dylib",
+            ".bin",
+            ".pyc",
         }
 
         if file_path.suffix.lower() in binary_extensions:

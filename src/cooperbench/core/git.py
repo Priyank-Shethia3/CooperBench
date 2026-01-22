@@ -41,11 +41,11 @@ def setup_base_repo(task_folder: Path) -> Path:
             )
         else:
             raise FileNotFoundError(f"Setup script not found in {task_folder}")
-        
+
         base_repo_path = get_base_repo_path(task_folder)
         if base_repo_path is None:
             raise RuntimeError(f"No git repository found in {task_folder} after running setup script.")
-    
+
     return base_repo_path
 
 
@@ -56,7 +56,7 @@ def setup_agent_workspace(
     agent_workspace_path: Path,
 ) -> Path:
     """Create a clean worktree for the agent to work in.
-    
+
     Args:
         base_repo_path: Path to the base git repository
         base_commit: Commit hash to base the worktree on
@@ -126,7 +126,7 @@ def run_git_command(
     return_returncode: bool = False,
 ) -> tuple[str, int] | str:
     """Run a git command in a specific worktree.
-    
+
     Args:
         worktree_path: Path to the git worktree
         *args: Git command arguments

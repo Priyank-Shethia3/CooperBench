@@ -6,6 +6,8 @@ including different planning strategies for single-agent, solo-feature,
 and cooperative multi-agent scenarios.
 """
 
+from cooperbench.planning.agent import BaseAgent
+from cooperbench.planning.plan import create_plan
 from cooperbench.planning.tools import (
     AgreementTool,
     BaseTool,
@@ -17,8 +19,6 @@ from cooperbench.planning.tools import (
     ToolResult,
 )
 from cooperbench.planning.trajectory import TrajectoryLogger
-from cooperbench.planning.agent import BaseAgent
-from cooperbench.planning.plan import create_plan
 
 __all__ = [
     # Main entrypoint

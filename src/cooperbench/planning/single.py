@@ -89,7 +89,7 @@ async def run_planning(file_interface: FileInterface, max_iterations: int = 50) 
     trajectory_logger = TrajectoryLogger("single", agent_workspace_path)
     trajectory_logger.register_agent("single", model, "single")
 
-    print(f"\n[PLANNING] Starting single planning")
+    print("\n[PLANNING] Starting single planning")
     print(f"  Workspace: {agent_workspace_path}")
     print(f"  Model: {model}")
 

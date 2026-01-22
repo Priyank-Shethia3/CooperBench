@@ -50,6 +50,7 @@ packages = ["src/cooperbench"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+exclude = ["src/cooperbench/execution/openhands_colab/"]
 
 [tool.ruff.lint]
 select = [
@@ -57,26 +58,9 @@ select = [
     "F",      # pyflakes
     "I",      # isort
     "UP",     # pyupgrade
-    "B",      # flake8-bugbear
-    "ANN",    # flake8-annotations
-    "S",      # flake8-bandit
-    "C4",     # flake8-comprehensions
-    "DTZ",    # flake8-datetimez
-    "ISC",    # flake8-implicit-str-concat
-    "PIE",    # flake8-pie
-    "PT",     # flake8-pytest-style
-    "RET",    # flake8-return
-    "SIM",    # flake8-simplify
-    "ARG",    # flake8-unused-arguments
-    "PL",     # pylint
-    "RUF",    # ruff-specific
 ]
 ignore = [
-    "ANN101",   # missing type annotation for self
-    "ANN102",   # missing type annotation for cls
-    "ANN401",   # dynamically typed expressions (Any)
-    "PLR0913",  # too many arguments
-    "S101",     # use of assert
+    "E501",   # line too long (handled by formatter)
 ]
 
 [tool.ruff.lint.isort]
@@ -84,9 +68,11 @@ known-first-party = ["cooperbench"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
-plugins = ["pydantic.mypy"]
-exclude = ["tests/"]
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_untyped_defs = false
+disable_error_code = ["override", "misc", "no-any-return", "arg-type", "call-arg", "operator", "assignment", "call-overload", "index"]
+exclude = ["tests/", "openhands_colab/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

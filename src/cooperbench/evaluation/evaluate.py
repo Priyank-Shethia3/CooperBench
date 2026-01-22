@@ -10,7 +10,6 @@ import argparse
 import asyncio
 import json
 import time
-from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -18,7 +17,6 @@ from dotenv import load_dotenv
 from cooperbench import BenchSetting, FileInterface
 from cooperbench.core.git import run_git_command
 from cooperbench.core.merge import analyze_merge, merge
-from cooperbench.core.patch import apply_patch
 from cooperbench.core.paths import get_branch_name
 from cooperbench.evaluation.test_runner import run_tests
 

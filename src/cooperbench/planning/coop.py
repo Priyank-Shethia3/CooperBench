@@ -217,7 +217,7 @@ class CoopCoordinator:
         """
         agent_plans: dict[int, str] = {}
 
-        print(f"\n[PLANNING] Starting coop planning")
+        print("\n[PLANNING] Starting coop planning")
         print(f"  Workspace: {self.agent_workspace_path}")
         print(f"  Models: {self.model1}, {self.model2}")
 

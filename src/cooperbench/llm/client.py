@@ -65,7 +65,7 @@ async def call_llm(
     **kwargs: object,
 ) -> tuple[list[dict[str, Any]] | None, str] | dict[str, Any]:
     """Call the LLM with the given messages and tools.
-    
+
     Args:
         messages: List of message dicts (role, content)
         tools: List of tool schemas for function calling
@@ -79,10 +79,10 @@ async def call_llm(
         Otherwise: tuple of (tool_calls list or None, content string)
     """
     is_qwen = "qwen" in model.lower()
-    
+
     if max_input_tokens is None and is_qwen:
         max_input_tokens = 28000
-    
+
     if is_qwen:
         sanitized_messages = _sanitize_special_tokens(messages)
     else:
@@ -106,10 +106,10 @@ async def call_llm(
             trimmed_messages = trim_messages(sanitized_messages, model, max_tokens=max_input_tokens)
         except ValueError:
             trimmed_messages = sanitized_messages
-        
+
         max_retries = 2
         current_max_tokens = max_input_tokens
-        
+
         for attempt in range(max_retries + 1):
             try:
                 response = await litellm.acompletion(
@@ -146,7 +146,7 @@ async def call_llm(
     content = message.content or ""
 
     tool_calls = None
-    
+
     if hasattr(message, "tool_calls") and message.tool_calls:
         tool_calls = []
         for tool_call in message.tool_calls:
@@ -162,19 +162,19 @@ async def call_llm(
                     "arguments": arguments,
                 },
             }
-            
+
             if hasattr(tool_call, "provider_specific_fields") and tool_call.provider_specific_fields:
                 tool_call_dict["provider_specific_fields"] = tool_call.provider_specific_fields
-            
+
             tool_calls.append(tool_call_dict)
-    
+
     if not tool_calls and content and is_qwen:
         tool_calls = _parse_tool_calls_from_content(content)
         if tool_calls:
-            content = re.sub(r'<tool_call>.*?</tool_call>', '', content, flags=re.DOTALL).strip()
+            content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL).strip()
 
     if return_full_response:
-        if hasattr(message, 'model_dump'):
+        if hasattr(message, "model_dump"):
             message_dict = message.model_dump(exclude_none=True)
         else:
             message_dict = message
@@ -189,16 +189,16 @@ async def call_llm(
 def _parse_tool_calls_from_content(content: str) -> list[dict[str, Any]] | None:
     """Parse tool calls from <tool_call>...</tool_call> format (Qwen fallback)."""
     tool_calls = []
-    
-    pattern = r'<tool_call>\s*(.*?)\s*</tool_call>'
+
+    pattern = r"<tool_call>\s*(.*?)\s*</tool_call>"
     matches = re.findall(pattern, content, re.DOTALL)
-    
+
     for idx, match in enumerate(matches):
         try:
             tool_data = json.loads(match.strip())
             tool_name = tool_data.get("name", "")
             tool_args = tool_data.get("arguments", {})
-            
+
             if tool_name:
                 tool_calls.append(
                     {
@@ -212,5 +212,5 @@ def _parse_tool_calls_from_content(content: str) -> list[dict[str, Any]] | None:
         except json.JSONDecodeError as e:
             print(f"[WARNING] Failed to parse tool call from content: {e}")
             continue
-    
+
     return tool_calls if tool_calls else None

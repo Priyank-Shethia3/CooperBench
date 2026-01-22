@@ -335,7 +335,7 @@ def _analyze_diff_content(diff_output: str) -> dict[str, Any]:
 
 def _calculate_conflict_score(conflict_details: dict[str, Any]) -> int:
     """Calculate conflict score based on details.
-    
+
     Scoring:
     - Each conflict section: 20 points
     - Each conflicting line: 2 points

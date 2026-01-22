@@ -101,11 +101,7 @@ class OpenHandsAgent(BaseAgent):
             f"{agent_workspace_absolute}:/opt/workspace_base:rw",
             "-v",
             f"{Path.cwd()}/logs:/logs:rw",
-            *(
-                ["-v", f"{credentials_path}:{container_credentials_path}"]
-                if credentials_path
-                else []
-            ),
+            *(["-v", f"{credentials_path}:{container_credentials_path}"] if credentials_path else []),
             "-v",
             "/var/run/docker.sock:/var/run/docker.sock",
             "-v",
@@ -160,33 +156,13 @@ class OpenHandsAgent(BaseAgent):
 def _resolve_api_key(model: str) -> str:
     """Resolve API key based on model type."""
     if "claude" in model.lower() or "anthropic" in model.lower():
-        return (
-            os.getenv("LLM_API_KEY")
-            or os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or ""
-        )
+        return os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
     elif "gpt" in model.lower() or "openai" in model.lower():
-        return (
-            os.getenv("LLM_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or os.getenv("ANTHROPIC_API_KEY")
-            or ""
-        )
+        return os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or ""
     elif "gemini" in model.lower() or "google" in model.lower():
-        return (
-            os.getenv("LLM_API_KEY")
-            or os.getenv("GOOGLE_API_KEY")
-            or os.getenv("GEMINI_API_KEY")
-            or ""
-        )
+        return os.getenv("LLM_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
     else:
-        return (
-            os.getenv("LLM_API_KEY")
-            or os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or ""
-        )
+        return os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
 
 
 async def run_execution(
@@ -213,9 +189,7 @@ async def run_execution(
         or os.getenv("OPENHANDS_RUNTIME_IMAGE")
         or "docker.all-hands.dev/all-hands-ai/runtime:0.54-nikolaik"
     )
-    openhands_image = os.getenv(
-        "OPENHANDS_IMAGE", "docker.all-hands.dev/all-hands-ai/openhands:0.54"
-    )
+    openhands_image = os.getenv("OPENHANDS_IMAGE", "docker.all-hands.dev/all-hands-ai/openhands:0.54")
 
     llm_api_key = _resolve_api_key(model)
 

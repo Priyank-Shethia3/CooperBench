@@ -78,7 +78,7 @@ PACKAGE_VERSION_PATTERNS: list[str] = [
 
 def generate_patch(agent_workspace_path: Path, base_commit: str) -> str:
     """Generate a diff from the current changes in the feature branch.
-    
+
     Args:
         agent_workspace_path: Path to the agent workspace
         base_commit: Commit hash to diff against
@@ -97,7 +97,7 @@ def apply_patch(
     filter_patch: bool = True,
 ) -> None:
     """Apply a patch file to the given agent workspace.
-    
+
     Args:
         agent_workspace_path: Path to the agent workspace
         local_patch_path: Path to the local patch file
@@ -105,12 +105,12 @@ def apply_patch(
     """
     if filter_patch:
         local_patch_path = _filter_patch(local_patch_path)
-    
+
     try:
         if not local_patch_path.exists():
             logger.error(f"Patch file not found at {local_patch_path}")
             sys.exit(1)
-        
+
         if local_patch_path.stat().st_size == 0:
             logger.info(f"Patch file {local_patch_path.name} is empty. Skipping application.")
             return
@@ -158,7 +158,7 @@ def apply_patch(
 
 def _filter_patch(local_patch_path: Path) -> Path:
     """Filter non-code changes from a patch file.
-    
+
     Saves the filtered patch to a .filtered.patch file.
     """
     patch_content = local_patch_path.read_text()
@@ -234,7 +234,7 @@ def split_patch(patch: str) -> list[str]:
 
 def split_patch_by_type(base_patch: str) -> dict[str, str]:
     """Split a patch into separate patches based on file types.
-    
+
     Returns a dict with keys: code, tests, docs, dependencies
     """
     if not base_patch:
@@ -242,7 +242,7 @@ def split_patch_by_type(base_patch: str) -> dict[str, str]:
 
     patches = split_patch(base_patch)
     grouped_patches: dict[str, str] = {"code": "", "tests": "", "docs": "", "dependencies": ""}
-    
+
     for patch in patches:
         categorized_patch = parse_patch_file_paths(patch)
         category = next((k for k, v in categorized_patch.items() if v), None)
