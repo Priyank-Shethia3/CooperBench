@@ -1,8 +1,14 @@
 """
-Evaluation phase for CooperBench experiments.
+Evaluation phase components for CooperBench.
 
-This module handles evaluation of agent-generated code including:
-- Test execution and validation
-- Merge conflict analysis between feature implementations
-- Result aggregation across multiple experiments
+This subpackage handles test execution, merge conflict analysis,
+and result aggregation.
 """
+
+from cooperbench.evaluation.evaluate import evaluate
+from cooperbench.evaluation.test_runner import run_tests
+
+__all__ = [
+    "evaluate",
+    "run_tests",
+]

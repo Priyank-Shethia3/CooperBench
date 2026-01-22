@@ -31,6 +31,12 @@ htmlcov/
 # Type checking
 .mypy_cache/
 
+# Linting
+.ruff_cache/
+
+# Documentation
+site/
+
 # Logs and runtime
 logs/
 *.log
@@ -50,8 +56,11 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# Dataset (large files, stored separately)
-dataset/
+# Runtime-generated folders and files within dataset
+dataset/**/agent_workspace/
+dataset/**/*-pr-*/
+dataset/**/*_main/
+dataset/**/requirements_validated.txt
 
 # Agent workspaces (generated at runtime)
-agent_workspace/
+**/agent_workspace/

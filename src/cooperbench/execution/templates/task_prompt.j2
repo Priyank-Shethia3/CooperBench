@@ -1,0 +1,21 @@
+{% if feature_description %}
+{{ feature_description }}
+{% endif %}
+
+{% if plan %}
+
+## IMPLEMENTATION PLAN
+
+You have been provided with the following implementation plan from the planning phase. Please follow this plan as closely as possible:
+
+{{ plan }}
+{% endif %}
+
+---
+
+## GUIDELINES
+
+1. **Follow the implementation plan carefully** - The plan was generated specifically for this task and should guide your implementation approach.
+2. **Implement the feature** - Focus on implementing the specific feature requirements without unnecessary modifications to unrelated code.
+3. **DO NOT USE GIT COMMANDS** - You are strictly forbidden from using any git commands (git add, git commit, git push, git pull, etc.) during execution. Focus only on implementing the code changes.
+4. **CLEAN UP TEST SCRIPTS** - Before finishing, remove any temporary test scripts, debug files, or experimental code that you may have added during the implementation process. Only keep the final, clean implementation.

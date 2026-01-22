@@ -39,8 +39,17 @@ cooperbench/
         coop.py         # Cooperative planning
         templates/      # Jinja2 prompt templates
     
-    execution/          # Execution phase (OpenHands integration)
-    evaluation/         # Evaluation phase (tests, merge analysis)
+    execution/          # Execution phase
+        execute.py      # Main entrypoint
+        agent.py        # BaseAgent class
+        openhands.py    # OpenHands Docker integration
+        prompt.py       # Task prompt rendering
+        templates/      # Jinja2 prompt templates
+    
+    evaluation/         # Evaluation phase
+        evaluate.py     # Main entrypoint
+        test_runner.py  # Test execution
+    
     serve/              # Cloud deployment (Modal)
 ```
 

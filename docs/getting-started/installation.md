@@ -35,10 +35,41 @@ pip install cooperbench[all]
 ## Install from Source
 
 ```bash
-git clone https://github.com/cooperbench/cooperbench.git
+# Clone with submodules (required for coop execution)
+git clone --recurse-submodules https://github.com/cooperbench/cooperbench.git
 cd cooperbench
 pip install -e ".[all]"
 ```
+
+If you already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+## For Execution Phase
+
+Execution requires Docker:
+
+```bash
+# Verify Docker is running
+docker info
+```
+
+### For `coop` Mode Only
+
+The `coop` setting requires custom OpenHands Docker images:
+
+```bash
+cd src/cooperbench/execution/openhands_colab
+./build
+```
+
+This builds:
+- `colab/openhands_colab:latest`
+- `colab/openhands_runtime_colab:latest`
+
+**Note:** Building requires `poetry` (`pip install poetry`).
 
 ## Environment Setup
 

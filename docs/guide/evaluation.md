@@ -1,10 +1,6 @@
 # Evaluation Phase
 
-The evaluation phase measures the quality of agent-generated code changes.
-
-!!! warning "Not Yet Migrated"
-    The evaluation phase is not yet fully implemented in the new CooperBench package.
-    This documentation describes the planned functionality.
+The evaluation phase measures the quality of agent-generated code changes through test execution and merge conflict analysis.
 
 ## Overview
 
@@ -14,34 +10,80 @@ Evaluation performs:
 2. **Merge Analysis**: Check if patches from multiple agents can merge cleanly
 3. **Conflict Scoring**: Quantify the severity of any merge conflicts
 
-## Planned CLI
+## Running Evaluation
+
+### Via CLI
 
 ```bash
+# Test evaluation (single/solo)
+cooperbench evaluate \
+    --setting single \
+    --repo-name pallets_click_task \
+    --task-id 2068 \
+    --feature1-id 1 \
+    --model1 gpt-5 \
+    --eval-type test \
+    --patch-location logs \
+    --not-save-to-hf
+
+# Merge evaluation (coop/coop_ablation)
 cooperbench evaluate \
     --setting coop \
-    --repo-name my_repo \
-    --task-id 123 \
+    --repo-name pallets_click_task \
+    --task-id 2068 \
     --feature1-id 1 \
     --feature2-id 2 \
-    --model gpt-5 \
-    --patch-location logs
+    --model1 gpt-5 \
+    --model2 gpt-5 \
+    --eval-type merge \
+    --patch-location logs \
+    --not-save-to-hf
 ```
+
+### Via Python API
+
+```python
+import asyncio
+from cooperbench import BenchSetting, FileInterface
+from cooperbench.evaluation import evaluate
+
+async def run():
+    interface = FileInterface(
+        setting=BenchSetting.COOP,
+        repo_name="pallets_click_task",
+        task_id=2068,
+        k=1,
+        feature1_id=1,
+        feature2_id=2,
+        model1="gpt-5",
+        model2="gpt-5",
+        save_to_hf=False,
+    )
+
+    results = await evaluate(interface, eval_type="merge", file_location="logs")
+    print(f"Conflict score: {results['conflict_score']}")
+
+asyncio.run(run())
+```
+
+## Evaluation Types
+
+| Type | Settings | Description |
+|------|----------|-------------|
+| `test` | single, solo | Run feature tests against patch |
+| `merge` | coop, coop_ablation | Merge analysis + tests |
 
 ## Metrics
 
 ### Test Pass Rate
 
-Percentage of tests that pass after applying the patch:
-
-```python
-pass_rate = passed_tests / total_tests
-```
+Whether all feature tests pass after applying the patch.
 
 ### Merge Status
 
 Whether two patches can be merged:
 
-- `clean` - No conflicts
+- `clean` - No conflicts, git merge succeeds
 - `conflicts` - Has merge conflicts
 
 ### Conflict Score
@@ -52,28 +94,29 @@ Quantifies merge conflict severity:
 conflict_score = (conflict_sections * 20) + (conflict_lines * 2)
 ```
 
-## Merge Strategies
+## Patch Locations
 
-Three merge strategies are evaluated:
+Patches can be loaded from:
 
-1. **Naive**: Standard git merge
-2. **Union**: Concatenates conflicting changes
-3. **LLM**: Uses an LLM to resolve conflicts
+| Location | Description |
+|----------|-------------|
+| `logs` | Local logs directory (default) |
+| `cache` | Local cache (previously downloaded from HF) |
+| `hf` | Download fresh from HuggingFace |
 
 ## Output Files
 
 | File | Description |
 |------|-------------|
-| `test_result_<model>_<repo>_task<id>_f<f>_k<k>.txt` | Test execution results |
-| `merge_report_f<f1>_into_f<f2>_k<k>.json` | Merge analysis report |
-| `merge_diff_f<f1>_into_f<f2>_k<k>.diff` | Merged diff file |
+| `test_result_*.json` | Test execution results |
+| `merge_report_*.json` | Merge analysis report |
 
 ## Merge Report Format
 
 ```json
 {
-  "repo_name": "my_repo",
-  "task_id": 123,
+  "repo_name": "pallets_click_task",
+  "task_id": 2068,
   "timestamp": "2024-01-15 10:30:00",
   "feature1": {
     "number": 1,
@@ -93,4 +136,17 @@ Three merge strategies are evaluated:
     "avg_lines_per_conflict": 5.5
   }
 }
+```
+
+## Test Script
+
+Each task has a `run_tests.sh` script that:
+
+1. Applies the test patch
+2. Runs the test suite
+3. Returns exit code 0 for pass, non-zero for fail
+
+```bash
+# Called internally by the evaluation
+./run_tests.sh <workspace_path> <tests_patch_path>
 ```

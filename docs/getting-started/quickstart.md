@@ -94,8 +94,59 @@ async def run_experiment():
 asyncio.run(run_experiment())
 ```
 
+## Running Execution
+
+After planning, execute the implementation plan:
+
+```bash
+cooperbench execute \
+    --setting single \
+    --repo-name pallets_jinja_task \
+    --task-id 1621 \
+    --feature1-id 1 \
+    --model1 anthropic/claude-sonnet-4-5-20250929 \
+    --plan-location logs \
+    --not-save-to-hf
+```
+
+Execution requires Docker with OpenHands images.
+
+## Running Evaluation
+
+After execution, evaluate the generated patches:
+
+```bash
+cooperbench evaluate \
+    --setting single \
+    --repo-name pallets_jinja_task \
+    --task-id 1621 \
+    --feature1-id 1 \
+    --model1 anthropic/claude-sonnet-4-5-20250929 \
+    --eval-type test \
+    --patch-location logs \
+    --not-save-to-hf
+```
+
+## Full Experiment Workflow
+
+```bash
+# 1. Planning - generate implementation plan
+cooperbench plan --setting single --repo-name my_repo --task-id 123 \
+    --feature1-id 1 --model1 gpt-5 --not-save-to-hf
+
+# 2. Execution - run the plan to generate code
+cooperbench execute --setting single --repo-name my_repo --task-id 123 \
+    --feature1-id 1 --model1 gpt-5 --plan-location logs --not-save-to-hf
+
+# 3. Evaluation - test the generated code
+cooperbench evaluate --setting single --repo-name my_repo --task-id 123 \
+    --feature1-id 1 --model1 gpt-5 --eval-type test --patch-location logs --not-save-to-hf
+```
+
 ## Next Steps
 
 - Read about [Experiment Settings](../concepts/settings.md) to understand the different modes
 - Learn about the [Planning Phase](../guide/planning.md) in detail
+- Explore the [Execution Phase](../guide/execution.md) for Docker setup
+- Review [Evaluation Phase](../guide/evaluation.md) for metrics
 - Explore the [System Design](../concepts/design.md) to understand the architecture

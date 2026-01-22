@@ -1,9 +1,14 @@
 """
-Execution phase for CooperBench experiments.
+Execution phase components for CooperBench.
 
-This module handles the execution phase where agents implement their planned
-features using the OpenHands framework. Supports:
-- Single agent execution (SINGLE, SOLO modes)
-- Parallel multi-agent execution with communication (COOP mode)
-- Parallel multi-agent execution without communication (COOP_ABLATION mode)
+This subpackage handles the execution of implementation plans using
+agent frameworks like OpenHands.
 """
+
+from cooperbench.execution.execute import create_execution
+from cooperbench.execution.prompt import render_task_prompt
+
+__all__ = [
+    "create_execution",
+    "render_task_prompt",
+]

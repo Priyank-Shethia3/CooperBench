@@ -1,0 +1,35 @@
+[package]
+name = "typst-tests"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[[test]]
+name = "tests"
+path = "src/tests.rs"
+harness = false
+
+[dependencies]
+typst = { workspace = true }
+typst-assets = { workspace = true, features = ["fonts"] }
+typst-dev-assets = { workspace = true }
+typst-pdf = { workspace = true }
+typst-render = { workspace = true }
+typst-svg = { workspace = true }
+clap = { workspace = true }
+comemo = { workspace = true }
+ecow = { workspace = true }
+once_cell = { workspace = true }
+oxipng = { workspace = true }
+parking_lot = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+tiny-skia = { workspace = true }
+ttf-parser = { workspace = true }
+unscanny = { workspace = true }
+walkdir = { workspace = true }
+
+[lints]
+workspace = true

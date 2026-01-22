@@ -29,10 +29,11 @@ def main() -> None:
     _add_common_args(exec_parser)
     exec_parser.add_argument("--plan-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load plans from")
 
-    # Evaluate command (placeholder)
+    # Evaluate command
     eval_parser = subparsers.add_parser("evaluate", help="Run evaluation phase")
     _add_common_args(eval_parser)
     eval_parser.add_argument("--patch-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load patches from")
+    eval_parser.add_argument("--eval-type", default="test", choices=["test", "merge"], help="Evaluation type: test (single/solo) or merge (coop)")
 
     args = parser.parse_args()
 
@@ -43,11 +44,9 @@ def main() -> None:
     if args.command == "plan":
         asyncio.run(_run_plan(args))
     elif args.command == "execute":
-        print("Execute command not yet implemented in the new codebase")
-        sys.exit(1)
+        asyncio.run(_run_execute(args))
     elif args.command == "evaluate":
-        print("Evaluate command not yet implemented in the new codebase")
-        sys.exit(1)
+        asyncio.run(_run_evaluate(args))
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -89,6 +88,50 @@ async def _run_plan(args: argparse.Namespace) -> None:
     )
 
     await create_plan(file_interface, args.max_iterations)
+
+
+async def _run_execute(args: argparse.Namespace) -> None:
+    """Run the execution phase."""
+    from cooperbench.execution import create_execution
+
+    setting = BenchSetting(args.setting)
+
+    file_interface = FileInterface(
+        setting=setting,
+        repo_name=args.repo_name,
+        task_id=args.task_id,
+        k=args.k,
+        feature1_id=args.feature1_id,
+        model1=args.model1,
+        feature2_id=args.feature2_id,
+        model2=args.model2,
+        save_to_hf=not args.not_save_to_hf,
+        create_pr=args.create_pr,
+    )
+
+    await create_execution(file_interface, args.plan_location)
+
+
+async def _run_evaluate(args: argparse.Namespace) -> None:
+    """Run the evaluation phase."""
+    from cooperbench.evaluation import evaluate
+
+    setting = BenchSetting(args.setting)
+
+    file_interface = FileInterface(
+        setting=setting,
+        repo_name=args.repo_name,
+        task_id=args.task_id,
+        k=args.k,
+        feature1_id=args.feature1_id,
+        model1=args.model1,
+        feature2_id=args.feature2_id,
+        model2=args.model2,
+        save_to_hf=not args.not_save_to_hf,
+        create_pr=args.create_pr,
+    )
+
+    await evaluate(file_interface, args.eval_type, args.patch_location)
 
 
 if __name__ == "__main__":
