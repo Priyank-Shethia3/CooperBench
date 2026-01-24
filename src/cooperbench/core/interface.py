@@ -288,9 +288,10 @@ class FileInterface:
 
     # PLANNING FILES
 
-    def get_plan(self, plan_location: str | None = None) -> str:
-        """Get the first plan for the task."""
-        local_plan_path = self._get_local_file_path(self.file_paths["plan1"], plan_location)
+    def get_plan(self, plan_location: str | None = None, first: bool = True) -> str:
+        """Get the plan for the task."""
+        plan_key = "plan1" if first else "plan2"
+        local_plan_path = self._get_local_file_path(self.file_paths[plan_key], plan_location)
         return self._get_file_content(local_plan_path)
 
     def save_plan(self, content: str, first: bool = True) -> None:
@@ -309,11 +310,12 @@ class FileInterface:
         """Get the path to the agent patch file."""
         return self._get_local_file_path(self.file_paths["patch1" if first else "patch2"], patch_location)
 
-    def save_patch(self, diff_content: str) -> None:
+    def save_patch(self, diff_content: str, first: bool = True) -> None:
         """Save the patch content. Skips saving if patch is empty."""
         if not diff_content or not diff_content.strip():
             return
-        self._save_and_upload_file(self.file_paths["patch1"], diff_content)
+        patch_key = "patch1" if first else "patch2"
+        self._save_and_upload_file(self.file_paths[patch_key], diff_content)
 
     def save_execution_trajectory(self) -> None:
         """Save the execution trajectory content."""

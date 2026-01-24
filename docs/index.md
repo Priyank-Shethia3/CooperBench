@@ -72,4 +72,3 @@ pip install cooperbench[all]
 - [Getting Started](getting-started/installation.md) - Installation and setup
 - [Concepts](concepts/overview.md) - Understanding CooperBench architecture
 - [User Guide](guide/planning.md) - Detailed usage instructions
-- [API Reference](api/core.md) - Python API documentation

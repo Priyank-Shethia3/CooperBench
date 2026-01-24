@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from cooperbench import BenchSetting, FileInterface
 from cooperbench.core.patch import generate_patch
 from cooperbench.execution.openhands import run_execution as run_openhands_execution
+from cooperbench.execution.openhands_coop import run_coop_execution
 from cooperbench.execution.prompt import render_task_prompt
 
 load_dotenv()
@@ -80,7 +81,7 @@ async def _run_coop_execution(
     file_interface: FileInterface,
     plan_location: Literal["logs", "cache", "hf"] = "cache",
 ) -> None:
-    """Coop execution with two agents running in parallel with communication.
+    """Coop execution with two agents running in parallel with MCP communication.
 
     Args:
         file_interface: FileInterface object for file management
@@ -94,32 +95,31 @@ async def _run_coop_execution(
     plan_1 = file_interface.get_plan(plan_location, first=True)
     plan_2 = file_interface.get_plan(plan_location, first=False)
 
-    prompt_1 = render_task_prompt(feature_desc_1, plan_1)
-    prompt_2 = render_task_prompt(feature_desc_2, plan_2)
-
-    # Run both agents in parallel
-    results = await asyncio.gather(
-        run_openhands_execution(
-            agent_workspace_path=file_interface.agent_workspace1_path,
-            prompt=prompt_1,
-            model=file_interface.model1,
-            local_trajectory_path=file_interface.get_log_file_path("execution_traj1"),
-            container_name=file_interface.get_container_name() + "_agent1",
-        ),
-        run_openhands_execution(
-            agent_workspace_path=file_interface.agent_workspace2_path,
-            prompt=prompt_2,
-            model=file_interface.model2 or file_interface.model1,
-            local_trajectory_path=file_interface.get_log_file_path("execution_traj2"),
-            container_name=file_interface.get_container_name() + "_agent2",
-        ),
-        return_exceptions=True,
+    # Run parallel agents with MCP communication
+    (
+        success,
+        traj1_path,
+        traj2_path,
+        conversation_json_path,
+        agent_log_paths,
+    ) = await run_coop_execution(
+        workspace_1=file_interface.agent_workspace1_path,
+        workspace_2=file_interface.agent_workspace2_path,
+        feature_desc_1=feature_desc_1,
+        feature_desc_2=feature_desc_2,
+        plan_1=plan_1,
+        plan_2=plan_2,
+        model1=file_interface.model1,
+        model2=file_interface.model2 or file_interface.model1,
+        feature1_id=file_interface.feature1_id,
+        feature2_id=file_interface.feature2_id,
+        repo_name=file_interface.repo_name,
+        task_id=file_interface.task_id,
+        k=file_interface.k,
     )
 
-    success1 = results[0] if not isinstance(results[0], Exception) else False
-    success2 = results[1] if not isinstance(results[1], Exception) else False
-
-    if success1:
+    if success:
+        # Generate patch for agent 1
         diff_content_1 = generate_patch(
             agent_workspace_path=file_interface.agent_workspace1_path,
             base_commit=file_interface.base_commit,
@@ -127,7 +127,7 @@ async def _run_coop_execution(
         if diff_content_1 and diff_content_1.strip():
             file_interface.save_patch(diff_content_1, first=True)
 
-    if success2:
+        # Generate patch for agent 2
         diff_content_2 = generate_patch(
             agent_workspace_path=file_interface.agent_workspace2_path,
             base_commit=file_interface.base_commit,
@@ -135,10 +135,17 @@ async def _run_coop_execution(
         if diff_content_2 and diff_content_2.strip():
             file_interface.save_patch(diff_content_2, first=False)
 
-    if success1 and success2:
+        # Save coop execution files (trajectories, conversation)
+        file_interface.save_coop_execution_files(
+            execution_traj1_path=traj1_path,
+            execution_traj2_path=traj2_path,
+            conversation_json_path=conversation_json_path,
+            agent_log_paths=agent_log_paths,
+        )
+
         print("SUCCESS: Coop execution completed successfully.")
     else:
-        print(f"PARTIAL: Agent1={'OK' if success1 else 'FAIL'}, Agent2={'OK' if success2 else 'FAIL'}")
+        print("FAILURE: Coop execution failed.")
 
 
 async def _run_coop_ablation_execution(

@@ -72,10 +72,6 @@ nav:
     - Planning Phase: guide/planning.md
     - Execution Phase: guide/execution.md
     - Evaluation Phase: guide/evaluation.md
-  - API Reference:
-    - Core: api/core.md
-    - Planning: api/planning.md
-    - LLM: api/llm.md
 
 extra:
   social:

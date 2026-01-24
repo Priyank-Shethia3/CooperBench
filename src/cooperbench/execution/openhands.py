@@ -68,7 +68,7 @@ class OpenHandsAgent(BaseAgent):
         command = [
             "docker",
             "run",
-            "--pull=always",
+            "--pull=never",  # Use local images, don't try to pull from registry
             "-e",
             f"SANDBOX_RUNTIME_CONTAINER_IMAGE={self.config['RUNTIME_IMAGE']}",
             "-e",
@@ -171,6 +171,7 @@ async def run_execution(
     model: str,
     local_trajectory_path: Path,
     container_name: str,
+    use_colab_images: bool = False,
 ) -> bool:
     """Run OpenHands execution.
 
@@ -180,16 +181,25 @@ async def run_execution(
         model: LLM model to use
         local_trajectory_path: Path to save the execution trajectory log
         container_name: Docker container name to use
+        use_colab_images: If True, use custom colab images for coop mode
 
     Returns:
         bool: Success status
     """
+    # Default images based on mode
+    if use_colab_images:
+        default_runtime = "colab/openhands_runtime_colab:latest"
+        default_openhands = "colab/openhands_colab:latest"
+    else:
+        default_runtime = "docker.all-hands.dev/all-hands-ai/runtime:0.54-nikolaik"
+        default_openhands = "docker.all-hands.dev/all-hands-ai/openhands:0.54"
+
     runtime_image = (
         os.getenv("RUNTIME_IMAGE")
         or os.getenv("OPENHANDS_RUNTIME_IMAGE")
-        or "docker.all-hands.dev/all-hands-ai/runtime:0.54-nikolaik"
+        or default_runtime
     )
-    openhands_image = os.getenv("OPENHANDS_IMAGE", "docker.all-hands.dev/all-hands-ai/openhands:0.54")
+    openhands_image = os.getenv("OPENHANDS_IMAGE", default_openhands)
 
     llm_api_key = _resolve_api_key(model)
 
