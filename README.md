@@ -40,6 +40,17 @@ This builds two Docker images:
 - `colab/openhands_colab:latest` - OpenHands core with MCP support
 - `colab/openhands_runtime_colab:latest` - Runtime environment
 
+### Dataset
+
+The dataset is not included in the PyPI package. Download it separately:
+
+```bash
+# Clone from HuggingFace (recommended)
+git clone https://huggingface.co/datasets/cooperbench/cooperbench dataset/
+```
+
+Or if you installed from source, the dataset is already included.
+
 ## Experiment Settings
 
 CooperBench supports four experiment modes:
