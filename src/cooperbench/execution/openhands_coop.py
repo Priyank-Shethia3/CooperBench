@@ -62,8 +62,6 @@ class OpenHandsCoopAgent(BaseAgent):
 
     async def run_openhands(self) -> bool:
         """Run the OpenHands Docker command with MCP support asynchronously."""
-        import subprocess
-
         self.remove_existing_container()
 
         agent_workspace_path_absolute = str(self.agent_workspace_path.absolute())
@@ -274,13 +272,7 @@ async def run_coop_execution(
     # Create final logs directory
     feature_min = min(feature1_id, feature2_id)
     feature_max = max(feature1_id, feature2_id)
-    final_logs_dir = (
-        Path("logs")
-        / "coop"
-        / repo_name
-        / f"task{task_id}"
-        / f"feature{feature_min}_feature{feature_max}"
-    )
+    final_logs_dir = Path("logs") / "coop" / repo_name / f"task{task_id}" / f"feature{feature_min}_feature{feature_max}"
     shared_db_dir = final_logs_dir / "mcp_db"
 
     # Remove existing MCP database to prevent contamination

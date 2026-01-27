@@ -9,7 +9,6 @@ Supports evaluation modes:
 
 import argparse
 import asyncio
-import json
 import logging
 import time
 from typing import Literal
@@ -35,50 +34,51 @@ def _print_merge_summary(results: dict, file_interface: FileInterface) -> None:
     RED = "\033[31m"
     YELLOW = "\033[33m"
     RESET = "\033[0m"
-    
+
     def mark(passed: bool | None) -> str:
         if passed is True:
             return f"{GREEN}✓ pass{RESET}"
         elif passed is False:
             return f"{RED}✗ fail{RESET}"
         return f"{YELLOW}? skip{RESET}"
-    
+
     merge_status = results.get("merge_status", "unknown")
     conflict_score = results.get("conflict_score", 0)
     f1 = results.get("feature1", {})
     f2 = results.get("feature2", {})
-    
+
     naive_f1 = f1.get("naive_merge_test_passed")
     naive_f2 = f2.get("naive_merge_test_passed")
     union_f1 = f1.get("union_merge_test_passed")
     union_f2 = f2.get("union_merge_test_passed")
     llm_f1 = f1.get("llm_merge_test_passed")
     llm_f2 = f2.get("llm_merge_test_passed")
-    
+
     # Determine overall result
     any_passed = (
-        ((naive_f1 is True) and (naive_f2 is True)) or
-        ((union_f1 is True) and (union_f2 is True)) or
-        ((llm_f1 is True) and (llm_f2 is True))
+        ((naive_f1 is True) and (naive_f2 is True))
+        or ((union_f1 is True) and (union_f2 is True))
+        or ((llm_f1 is True) and (llm_f2 is True))
     )
     overall = "pass" if any_passed else "fail"
-    
+
     # Save simple result file
     from cooperbench.core.paths import get_log_path
+
     result_path = get_log_path(file_interface.file_paths["json_merge_report"]).parent / "result.txt"
     result_path.write_text(f"{overall}\n")
-    
+
     status_color = GREEN if merge_status == "clean" else RED
     result_color = GREEN if any_passed else RED
     print(f"\nMerge: {status_color}{merge_status}{RESET} (conflict_score={conflict_score})")
-    
+
     if naive_f1 is not None:
         print(f"  naive:  f1={mark(naive_f1)} f2={mark(naive_f2)}")
     if union_f1 is not None:
         print(f"  union:  f1={mark(union_f1)} f2={mark(union_f2)}")
     if llm_f1 is not None:
         print(f"  llm:    f1={mark(llm_f1)} f2={mark(llm_f2)}")
-    
+
     print(f"Result: {result_color}{overall}{RESET}")
 
 

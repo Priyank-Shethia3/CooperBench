@@ -194,11 +194,7 @@ async def run_execution(
         default_runtime = "docker.all-hands.dev/all-hands-ai/runtime:0.54-nikolaik"
         default_openhands = "docker.all-hands.dev/all-hands-ai/openhands:0.54"
 
-    runtime_image = (
-        os.getenv("RUNTIME_IMAGE")
-        or os.getenv("OPENHANDS_RUNTIME_IMAGE")
-        or default_runtime
-    )
+    runtime_image = os.getenv("RUNTIME_IMAGE") or os.getenv("OPENHANDS_RUNTIME_IMAGE") or default_runtime
     openhands_image = os.getenv("OPENHANDS_IMAGE", default_openhands)
 
     llm_api_key = _resolve_api_key(model)
