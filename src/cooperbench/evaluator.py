@@ -291,7 +291,7 @@ def _discover_runs_in_dir(
                 if run_setting is None:
                     with open(result_file) as f:
                         result_data = json.load(f)
-                    run_setting = result_data.get("setting", "coop")
+                    run_setting = result_data.get("setting")
                     if run_setting is None:
                         # Legacy: check for solo.patch
                         run_setting = "solo" if (feature_dir / "solo.patch").exists() else "coop"
