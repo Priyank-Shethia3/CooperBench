@@ -39,7 +39,8 @@ load_dotenv()
 os.environ["MSWEA_SILENT_STARTUP"] = "1"
 os.environ["MSWEA_COST_TRACKING"] = "ignore_errors"
 
-from rich.progress import (
+# Imports below must be after env var setup  # noqa: E402
+from rich.progress import (  # noqa: E402
     BarColumn,
     Progress,
     SpinnerColumn,
@@ -48,12 +49,12 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-from rich.table import Table
+from rich.table import Table  # noqa: E402
 
 # Import agent framework components
-from cooperbench.agents import get_runner
-from cooperbench.agents.mini_swe_agent.connectors.git import GitServer
-from cooperbench.utils import console, get_image_name
+from cooperbench.agents import get_runner  # noqa: E402
+from cooperbench.agents.mini_swe_agent.connectors.git import GitServer  # noqa: E402
+from cooperbench.utils import console, get_image_name  # noqa: E402
 
 
 def run(

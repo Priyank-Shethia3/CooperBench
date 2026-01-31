@@ -327,7 +327,7 @@ def evaluate_merge(
     patch2: str,
 ) -> dict:
     """Evaluate merged patches - wrapper for training compatibility.
-    
+
     Returns dict with keys expected by training code:
         feature1_tests_passed, feature1_tests_total,
         feature2_tests_passed, feature2_tests_total, error

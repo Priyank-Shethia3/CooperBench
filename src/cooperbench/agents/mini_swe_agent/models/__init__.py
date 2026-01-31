@@ -91,7 +91,7 @@ def get_model_class(model_name: str, model_class: str = "") -> type:
     """Select the best model class.
 
     If a model_class is provided (as shortcut name, or as full import path,
-    e.g., "anthropic" or "minisweagent.models.anthropic.AnthropicModel"),
+    e.g., "litellm" or "cooperbench.agents.mini_swe_agent.models.litellm_model.LitellmModel"),
     it takes precedence over the `model_name`.
     Otherwise, the model_name is used to select the best model class.
     """

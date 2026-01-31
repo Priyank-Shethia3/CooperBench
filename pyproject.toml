@@ -101,6 +101,9 @@ packages = ["src/cooperbench"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = [
+    "src/cooperbench/agents/swe_agent/",  # vendored code
+]
 
 [tool.ruff.lint]
 select = [
@@ -111,6 +114,7 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "UP046",  # Generic[T] style (keep for compatibility)
 ]
 
 [tool.ruff.lint.isort]
@@ -121,8 +125,8 @@ python_version = "3.12"
 ignore_missing_imports = true
 check_untyped_defs = false
 disallow_untyped_defs = false
-disable_error_code = ["override", "misc", "no-any-return", "arg-type", "call-arg", "operator", "assignment", "call-overload", "index", "import-untyped", "dict-item"]
-exclude = ["tests/"]
+disable_error_code = ["override", "misc", "no-any-return", "arg-type", "call-arg", "operator", "assignment", "call-overload", "index", "import-untyped", "dict-item", "var-annotated", "union-attr", "empty-body", "return-value", "attr-defined"]
+exclude = ["tests/", "src/cooperbench/agents/swe_agent/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

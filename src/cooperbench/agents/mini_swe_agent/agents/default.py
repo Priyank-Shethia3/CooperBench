@@ -13,7 +13,7 @@ from cooperbench.agents.mini_swe_agent.utils.log import logger
 
 
 class AgentConfig(BaseModel):
-    # Check the config files in minisweagent/config for example settings
+    # Check the config files in cooperbench/agents/mini_swe_agent/config for example settings
     system_template: str
     instance_template: str
     timeout_template: str

@@ -76,8 +76,8 @@ class AgentRunner(Protocol):
         ...
 
 
-# Import registry functions for convenience
-from cooperbench.agents.registry import get_runner, list_agents, register
+# Import registry functions for convenience (must be after class definitions to avoid circular imports)
+from cooperbench.agents.registry import get_runner, list_agents, register  # noqa: E402
 
 __all__ = [
     "AgentResult",
