@@ -1,6 +1,6 @@
-"""Integration tests for cooperbench.evaluator (requires Modal).
+"""Integration tests for cooperbench.eval.evaluate (requires Modal).
 
-Run with: pytest tests/integration/test_evaluator.py --run-modal
+Run with: pytest tests/integration/eval/test_evaluate.py --run-modal
 """
 
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cooperbench.evaluator import evaluate
+from cooperbench.eval import evaluate
 
 
 @pytest.mark.modal
@@ -31,9 +31,7 @@ class TestEvaluateE2E:
         # Write patches
         (run_dir / "agent1.patch").write_text(patch1)
         (run_dir / "agent2.patch").write_text(patch2)
-        (run_dir / "result.json").write_text(
-            json.dumps({"setting": "coop", "status": "completed"})
-        )
+        (run_dir / "result.json").write_text(json.dumps({"setting": "coop", "status": "completed"}))
 
         # Run evaluation
         evaluate(run_name="test-eval", concurrency=1)
@@ -62,9 +60,7 @@ class TestEvaluateE2E:
 
         # Write combined patch
         (run_dir / "solo.patch").write_text(patch1 + "\n" + patch2)
-        (run_dir / "result.json").write_text(
-            json.dumps({"setting": "solo", "status": "completed"})
-        )
+        (run_dir / "result.json").write_text(json.dumps({"setting": "solo", "status": "completed"}))
 
         # Run evaluation
         evaluate(run_name="test-solo", concurrency=1)

@@ -51,10 +51,25 @@ class TestPackageImports:
         modules = [
             "cooperbench",
             "cooperbench.cli",
-            "cooperbench.runner",
-            "cooperbench.evaluator",
-            "cooperbench.sandbox",
             "cooperbench.utils",
+            # Runner package
+            "cooperbench.runner",
+            "cooperbench.runner.tasks",
+            "cooperbench.runner.core",
+            "cooperbench.runner.solo",
+            "cooperbench.runner.coop",
+            # Eval package
+            "cooperbench.eval",
+            "cooperbench.eval.runs",
+            "cooperbench.eval.evaluate",
+            "cooperbench.eval.sandbox",
+            "cooperbench.eval.backends",
+            "cooperbench.eval.backends.base",
+            "cooperbench.eval.backends.modal",
+            # Infra package
+            "cooperbench.infra",
+            "cooperbench.infra.redis",
+            # Agents
             "cooperbench.agents",
             "cooperbench.agents.registry",
             "cooperbench.agents.mini_swe_agent",

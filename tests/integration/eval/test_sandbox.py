@@ -1,13 +1,13 @@
-"""Integration tests for cooperbench.sandbox (requires Modal).
+"""Integration tests for cooperbench.eval.sandbox (requires Modal).
 
-Run with: pytest tests/integration/test_sandbox.py --run-modal
+Run with: pytest tests/integration/eval/test_sandbox.py --run-modal
 """
 
 import pytest
 
-from cooperbench.sandbox import run_patch_test
-from cooperbench.sandbox import test_merged as sandbox_test_merged
-from cooperbench.sandbox import test_solo as sandbox_test_solo
+from cooperbench.eval.sandbox import run_patch_test
+from cooperbench.eval.sandbox import test_merged as sandbox_test_merged
+from cooperbench.eval.sandbox import test_solo as sandbox_test_solo
 from cooperbench.utils import get_image_name
 
 

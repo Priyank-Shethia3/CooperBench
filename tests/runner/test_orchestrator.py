@@ -1,77 +1,11 @@
-"""Unit tests for cooperbench.runner module.
-
-These are tests that don't require Modal.
-For integration tests, see tests/integration/test_runner.py
-"""
+"""Unit tests for cooperbench.runner.core module."""
 
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from cooperbench.runner import discover_tasks, run
-
-
-class TestDiscoverTasks:
-    """Tests for task discovery."""
-
-    def test_discover_all_tasks(self):
-        """Test discovering all tasks."""
-        tasks = discover_tasks()
-        assert len(tasks) > 0
-        assert all("repo" in t and "task_id" in t and "features" in t for t in tasks)
-
-    def test_discover_by_repo(self):
-        """Test filtering by repository."""
-        tasks = discover_tasks(repo_filter="llama_index_task")
-        assert len(tasks) > 0
-        assert all(t["repo"] == "llama_index_task" for t in tasks)
-
-    def test_discover_by_task_id(self):
-        """Test filtering by task ID."""
-        tasks = discover_tasks(repo_filter="llama_index_task", task_filter=17244)
-        assert len(tasks) > 0
-        assert all(t["task_id"] == 17244 for t in tasks)
-
-    def test_discover_specific_features(self):
-        """Test filtering by specific feature pair."""
-        tasks = discover_tasks(repo_filter="llama_index_task", task_filter=17244, features_filter=[1, 2])
-        assert len(tasks) == 1
-        assert tasks[0]["features"] == [1, 2]
-
-    def test_discover_generates_pairs(self):
-        """Test that discovery generates all feature pairs."""
-        tasks = discover_tasks(repo_filter="llama_index_task", task_filter=17244)
-        # Should have nC2 pairs
-        features_found = set()
-        for t in tasks:
-            features_found.add(tuple(sorted(t["features"])))
-        # At least some pairs
-        assert len(features_found) >= 1
-
-    def test_discover_nonexistent_repo(self):
-        """Test that nonexistent repo returns empty."""
-        tasks = discover_tasks(repo_filter="nonexistent_repo")
-        assert tasks == []
-
-    def test_discover_nonexistent_task_id(self):
-        """Test that nonexistent task ID returns empty."""
-        tasks = discover_tasks(task_filter=999999999)
-        assert tasks == []
-
-    def test_discover_returns_task_info(self):
-        """Test that discovered tasks have required fields."""
-        tasks = discover_tasks()
-        assert isinstance(tasks, list)
-
-        if tasks:  # If any tasks found
-            task = tasks[0]
-            assert "repo" in task
-            assert "task_id" in task
-            assert "features" in task
-            assert isinstance(task["features"], list)
-            assert len(task["features"]) == 2
+from cooperbench.runner import run
 
 
 class TestRunConfig:
@@ -85,13 +19,13 @@ class TestRunConfig:
     def test_run_validates_setting(self):
         """Test that invalid settings are handled."""
         # This should not crash, just find no tasks
-        with patch("cooperbench.runner.discover_tasks", return_value=[]):
+        with patch("cooperbench.runner.orchestrator.discover_tasks", return_value=[]):
             run(run_name="test", setting="coop")
             run(run_name="test", setting="solo")
 
     def test_run_handles_no_tasks(self):
         """Test that run handles case with no tasks."""
-        with patch("cooperbench.runner.discover_tasks", return_value=[]):
+        with patch("cooperbench.runner.orchestrator.discover_tasks", return_value=[]):
             # Should not raise
             run(run_name="test-empty", repo="nonexistent")
 

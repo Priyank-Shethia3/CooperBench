@@ -1,33 +1,11 @@
-"""Modal sandbox for running tests.
-
-This module creates isolated Docker containers via Modal to safely run tests.
-Each task has a pre-built Docker image (e.g., akhatua/cooperbench-llama-index:task17244)
-containing the repository at a specific commit.
-
-Key functions:
-    test_patch: Test a single agent's patch against one feature's tests
-    test_merged: Test merged patches from two agents (coop mode)
-    test_solo: Test one agent's patch against both features (solo mode)
-
-The testing flow:
-    1. Create Modal sandbox with task's Docker image
-    2. Write patches to /patches/ directory
-    3. Run runner.sh which applies patches and runs pytest/go test/cargo test
-    4. Parse output to determine pass/fail
-
-Merge strategy (for coop mode):
-    1. Apply each agent's patch to separate git branches
-    2. Try naive merge (git merge)
-    3. If conflicts, try union merge (concatenates conflicting lines)
-    4. Export merged diff and test against both feature test suites
-"""
+"""Sandbox execution for patch testing."""
 
 import base64
 import re
 from pathlib import Path
 
-import modal
-
+from cooperbench.eval.backends import get_backend
+from cooperbench.eval.backends.base import Sandbox
 from cooperbench.utils import get_image_name
 
 
@@ -37,6 +15,7 @@ def run_patch_test(
     feature_id: int,
     agent_patch: str | Path | None = None,
     timeout: int = 600,
+    backend: str = "modal",
 ) -> dict:
     """Test a single patch against one feature's tests.
 
@@ -46,6 +25,7 @@ def run_patch_test(
         feature_id: Which feature's tests to run
         agent_patch: Patch content (str) or path to .patch file
         timeout: Max seconds for sandbox execution
+        backend: Evaluation backend ("modal", "docker", "gcp_batch")
 
     Returns:
         Dict with keys: passed, tests_passed, tests_failed, output, error
@@ -73,7 +53,9 @@ def run_patch_test(
     if agent_patch is not None and not agent_patch_content:
         return _error_result("Agent patch is empty")
 
-    sb = _create_sandbox(repo_name, task_id, timeout)
+    image = get_image_name(repo_name, task_id)
+    eval_backend = get_backend(backend)
+    sb = eval_backend.create_sandbox(image, timeout)
 
     try:
         _write_patch(sb, "tests.patch", tests_patch)
@@ -85,9 +67,8 @@ def run_patch_test(
             result = sb.exec("bash", "/usr/local/bin/runner.sh", "tests.patch", "agent.patch")
         else:
             result = sb.exec("bash", "/usr/local/bin/runner.sh", "tests.patch")
-        result.wait()
 
-        output = result.stdout.read() + result.stderr.read()
+        output = result.stdout_read() + result.stderr_read()
         exit_code = result.returncode
         parsed = _parse_results(output)
 
@@ -113,6 +94,7 @@ def test_merged(
     patch1: str | Path | None = None,
     patch2: str | Path | None = None,
     timeout: int = 600,
+    backend: str = "modal",
 ) -> dict:
     """Test merged patches from two agents (coop mode).
 
@@ -127,6 +109,7 @@ def test_merged(
         patch1: First agent's patch
         patch2: Second agent's patch
         timeout: Max seconds for sandbox execution
+        backend: Evaluation backend
 
     Returns:
         Dict with keys: merge (status/strategy/diff), feature1, feature2,
@@ -152,7 +135,9 @@ def test_merged(
     tests1_content = tests1_path.read_text()
     tests2_content = tests2_path.read_text()
 
-    sb = _create_sandbox(repo_name, task_id, timeout)
+    image = get_image_name(repo_name, task_id)
+    eval_backend = get_backend(backend)
+    sb = eval_backend.create_sandbox(image, timeout)
 
     try:
         # Write all patches
@@ -192,14 +177,12 @@ def test_merged(
 
         # Step 4: Copy the right diff file to merged.patch
         if strategy_used == "naive":
-            cp_result = sb.exec("cp", "/patches/naive_diff.patch", "/patches/merged.patch")
+            sb.exec("cp", "/patches/naive_diff.patch", "/patches/merged.patch")
         else:
-            cp_result = sb.exec("cp", "/patches/union_diff.patch", "/patches/merged.patch")
-        cp_result.wait()
+            sb.exec("cp", "/patches/union_diff.patch", "/patches/merged.patch")
 
         # Verify merged.patch was created
         verify = sb.exec("test", "-f", "/patches/merged.patch")
-        verify.wait()
         if verify.returncode != 0:
             return _merged_error_result(f"Failed to create merged.patch (strategy: {strategy_used})")
 
@@ -239,6 +222,7 @@ def test_solo(
     feature2_id: int,
     patch: str | Path | None = None,
     timeout: int = 600,
+    backend: str = "modal",
 ) -> dict:
     """Test a solo patch against both features' tests.
 
@@ -252,6 +236,7 @@ def test_solo(
         feature2_id: Second feature ID
         patch: The solo agent's combined patch
         timeout: Max seconds for sandbox execution
+        backend: Evaluation backend
 
     Returns:
         Dict with keys: setting, patch_lines, feature1, feature2,
@@ -275,13 +260,14 @@ def test_solo(
     tests1_content = tests1_path.read_text()
     tests2_content = tests2_path.read_text()
 
-    sb = _create_sandbox(repo_name, task_id, timeout)
+    image = get_image_name(repo_name, task_id)
+    eval_backend = get_backend(backend)
+    sb = eval_backend.create_sandbox(image, timeout)
 
     try:
         # Get base SHA
         result = sb.exec("bash", "-c", "cd /workspace/repo && git rev-parse HEAD")
-        result.wait()
-        base_sha = result.stdout.read().strip()
+        base_sha = result.stdout_read().strip()
 
         if not base_sha:
             return _solo_error_result("Failed to get base commit SHA")
@@ -349,28 +335,19 @@ def evaluate_merge(
     }
 
 
-def _create_sandbox(repo_name: str, task_id: int, timeout: int) -> modal.Sandbox:
-    image_name = get_image_name(repo_name, task_id)
-    image = modal.Image.from_registry(image_name).entrypoint([])
-
-    app = modal.App.lookup("cooperbench-eval", create_if_missing=True)
-    sb = modal.Sandbox.create(image=image, timeout=timeout, workdir="/workspace", app=app)
-
-    result = sb.exec("mkdir", "-p", "/patches")
-    result.wait()
-
-    return sb
+# === Helper functions ===
 
 
-def _write_patch(sb: modal.Sandbox, filename: str, content: str) -> None:
+def _write_patch(sb: Sandbox, filename: str, content: str) -> None:
+    """Write a patch file to the sandbox."""
     encoded = base64.b64encode(content.encode()).decode()
     result = sb.exec("bash", "-c", f"echo '{encoded}' | base64 -d > /patches/{filename}")
-    result.wait()
     if result.returncode != 0:
-        raise RuntimeError(f"Failed to write {filename}: {result.stderr.read()}")
+        raise RuntimeError(f"Failed to write {filename}: {result.stderr_read()}")
 
 
-def _setup_branches(sb: modal.Sandbox) -> dict:
+def _setup_branches(sb: Sandbox) -> dict:
+    """Set up git branches for merge testing."""
     commands = """
 cd /workspace/repo
 git config user.email "eval@cooperbench.local"
@@ -400,8 +377,7 @@ git commit -m "Agent 2 changes" --allow-empty 2>&1
 echo "SETUP_COMPLETE"
 """
     result = sb.exec("bash", "-c", commands)
-    result.wait()
-    output = result.stdout.read() + result.stderr.read()
+    output = result.stdout_read() + result.stderr_read()
 
     if "SETUP_COMPLETE" not in output:
         return {"error": f"Branch setup failed: {output}"}
@@ -416,7 +392,8 @@ echo "SETUP_COMPLETE"
     return {"output": output, "error": None, "base_sha": base_sha}
 
 
-def _merge_naive(sb: modal.Sandbox, base_sha: str) -> dict:
+def _merge_naive(sb: Sandbox, base_sha: str) -> dict:
+    """Try naive git merge."""
     commands = f"""
 cd /workspace/repo
 git checkout agent2 2>&1
@@ -434,8 +411,7 @@ else
 fi
 """
     result = sb.exec("bash", "-c", commands)
-    result.wait()
-    output = result.stdout.read() + result.stderr.read()
+    output = result.stdout_read() + result.stderr_read()
 
     conflict = "MERGE_STATUS=conflicts" in output
 
@@ -443,13 +419,13 @@ fi
     diff = ""
     if not conflict:
         diff_result = sb.exec("cat", "/patches/naive_diff.patch")
-        diff_result.wait()
-        diff = diff_result.stdout.read()
+        diff = diff_result.stdout_read()
 
     return {"conflict": conflict, "diff": diff, "output": output}
 
 
-def _merge_union(sb: modal.Sandbox, base_sha: str) -> dict:
+def _merge_union(sb: Sandbox, base_sha: str) -> dict:
+    """Try union merge strategy."""
     commands = f"""
 cd /workspace/repo
 git checkout agent2 2>&1
@@ -474,21 +450,20 @@ fi
 git checkout .gitattributes 2>/dev/null || rm -f .gitattributes
 """
     result = sb.exec("bash", "-c", commands)
-    result.wait()
-    output = result.stdout.read() + result.stderr.read()
+    output = result.stdout_read() + result.stderr_read()
 
     if "UNION_STATUS=conflicts" in output:
         return {"error": "Union merge still has conflicts", "diff": "", "output": output}
 
     # Read diff from file
     diff_result = sb.exec("cat", "/patches/union_diff.patch")
-    diff_result.wait()
-    diff = diff_result.stdout.read()
+    diff = diff_result.stdout_read()
 
     return {"diff": diff, "output": output, "error": None}
 
 
-def _run_tests(sb: modal.Sandbox, tests_patch: str, feature_patch: str, base_sha: str) -> dict:
+def _run_tests(sb: Sandbox, tests_patch: str, feature_patch: str, base_sha: str) -> dict:
+    """Run tests via runner.sh."""
     commands = f"""
 cd /workspace/repo
 
@@ -503,9 +478,8 @@ echo "Reset to base: $(git rev-parse HEAD)"
 bash /usr/local/bin/runner.sh {tests_patch} {feature_patch}
 """
     result = sb.exec("bash", "-c", commands)
-    result.wait()
 
-    output = result.stdout.read() + result.stderr.read()
+    output = result.stdout_read() + result.stderr_read()
     exit_code = result.returncode
     parsed = _parse_results(output)
 
@@ -518,10 +492,22 @@ bash /usr/local/bin/runner.sh {tests_patch} {feature_patch}
 
 
 def _parse_results(output: str) -> dict:
+    """Parse test output to extract pass/fail counts.
+
+    Supports: pytest, go test, cargo test, jest/vitest
+    """
     passed = 0
     failed = 0
 
-    # pytest
+    # jest/vitest (TypeScript) - check first due to specific "Tests:" prefix
+    # Format: "Tests:       2 failed, 15 passed, 17 total"
+    jest_match = re.search(r"Tests:\s*(?:(\d+)\s*failed,\s*)?(\d+)\s*passed", output)
+    if jest_match:
+        failed = int(jest_match.group(1)) if jest_match.group(1) else 0
+        passed = int(jest_match.group(2))
+        return {"passed": passed, "failed": failed}
+
+    # pytest - look for the summary line format "X passed in Y.YYs"
     pytest_passed = re.search(r"(\d+) passed", output)
     pytest_failed = re.search(r"(\d+) failed", output)
     pytest_error = re.search(r"(\d+) error", output)
@@ -533,25 +519,25 @@ def _parse_results(output: str) -> dict:
     if pytest_error:
         failed += int(pytest_error.group(1))
 
+    if passed > 0 or failed > 0:
+        return {"passed": passed, "failed": failed}
+
     # go test
-    if passed == 0 and failed == 0:
-        go_pass = len(re.findall(r"--- PASS:", output))
-        go_fail = len(re.findall(r"--- FAIL:", output))
-        if go_pass or go_fail:
-            passed = go_pass
-            failed = go_fail
+    go_pass = len(re.findall(r"--- PASS:", output))
+    go_fail = len(re.findall(r"--- FAIL:", output))
+    if go_pass or go_fail:
+        return {"passed": go_pass, "failed": go_fail}
 
     # cargo test
-    if passed == 0 and failed == 0:
-        cargo_match = re.search(r"test result:.*?(\d+) passed.*?(\d+) failed", output)
-        if cargo_match:
-            passed = int(cargo_match.group(1))
-            failed = int(cargo_match.group(2))
+    cargo_match = re.search(r"test result:.*?(\d+) passed.*?(\d+) failed", output)
+    if cargo_match:
+        return {"passed": int(cargo_match.group(1)), "failed": int(cargo_match.group(2))}
 
     return {"passed": passed, "failed": failed}
 
 
 def _filter_test_files(patch_content: str) -> str:
+    """Filter test files from patch content."""
     if not patch_content:
         return patch_content
 
@@ -578,6 +564,7 @@ def _filter_test_files(patch_content: str) -> str:
 
 
 def _load_patch(patch: str | Path | None) -> str | None:
+    """Load patch content from string or file."""
     if patch is None:
         return None
     if isinstance(patch, Path):
@@ -596,12 +583,7 @@ def _load_patch(patch: str | Path | None) -> str | None:
 
 
 def _sanitize_patch(content: str) -> str:
-    """Sanitize patch content to fix common issues.
-
-    Fixes:
-    - Shell-escaped quotes: '\\'' -> '
-    - Missing trailing newline
-    """
+    """Sanitize patch content to fix common issues."""
     if not content:
         return content
 
@@ -645,6 +627,3 @@ def _solo_error_result(error: str) -> dict:
         "both_passed": False,
         "error": error,
     }
-
-
-__all__ = ["run_patch_test", "test_merged", "test_solo", "evaluate_merge"]

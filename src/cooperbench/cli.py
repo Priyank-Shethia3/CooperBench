@@ -165,7 +165,7 @@ def _run_command(args):
 
 def _eval_command(args):
     """Handle the 'eval' subcommand."""
-    from cooperbench.evaluator import evaluate
+    from cooperbench.eval import evaluate
 
     features = None
     if args.features:

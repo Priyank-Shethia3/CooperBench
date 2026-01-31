@@ -1,10 +1,9 @@
-"""Unit tests for cooperbench.evaluator (no Modal required)."""
+"""Unit tests for cooperbench.eval.runs module."""
 
 import json
 import os
-from pathlib import Path
 
-from cooperbench.evaluator import _discover_runs_in_dir, discover_runs
+from cooperbench.eval.runs import _discover_runs_in_dir, discover_runs
 
 
 class TestDiscoverRuns:

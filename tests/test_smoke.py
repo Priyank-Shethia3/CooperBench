@@ -6,8 +6,6 @@ These tests should run fast and catch obvious breakages.
 import subprocess
 import sys
 
-import pytest
-
 
 class TestSmoke:
     """Quick smoke tests for basic functionality."""
@@ -42,7 +40,7 @@ class TestSmoke:
 
     def test_agent_registry_works(self):
         """Test that agent registry is functional."""
-        from cooperbench.agents import list_agents, get_runner
+        from cooperbench.agents import list_agents
 
         agents = list_agents()
         assert isinstance(agents, list)
@@ -58,7 +56,7 @@ class TestSmoke:
 
     def test_sandbox_functions_exist(self):
         """Test that sandbox functions are exported."""
-        from cooperbench import test_merged, test_solo, evaluate_merge
+        from cooperbench import evaluate_merge, test_merged, test_solo
 
         assert callable(test_merged)
         assert callable(test_solo)
