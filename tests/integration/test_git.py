@@ -1,7 +1,7 @@
-"""Tests for the git collaboration connector.
+"""Integration tests for git collaboration connector.
 
-These tests require Modal and create actual sandboxes, so they're marked as slow/integration.
-Run with: pytest tests/connectors/test_git.py -v --run-modal
+These tests require Modal sandboxes and create actual git servers.
+Run with: pytest tests/integration/test_git.py --run-modal
 """
 
 import time
@@ -159,12 +159,12 @@ class TestGitConnector:
             # Agent1 makes changes and pushes
             env1.execute('echo "Agent1 was here" >> file.txt')
             env1.execute("git add . && git commit -m 'Agent1 changes'")
-            result = env1.execute("git push team agent1")
+            env1.execute("git push team agent1")
 
             # Agent2 fetches and merges
             time.sleep(0.5)  # Give time for push to complete
             env2.execute("git fetch team")
-            result = env2.execute("git merge team/agent1 -m 'Merge' --allow-unrelated-histories 2>&1 || true")
+            env2.execute("git merge team/agent1 -m 'Merge' --allow-unrelated-histories 2>&1 || true")
 
             # Verify agent2 has agent1's changes
             result = env2.execute("cat file.txt")

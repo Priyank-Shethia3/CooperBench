@@ -11,7 +11,7 @@ Usage:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass
@@ -37,6 +37,7 @@ class AgentResult:
     """Error message if status is 'Error'."""
 
 
+@runtime_checkable
 class AgentRunner(Protocol):
     """Interface that all agent framework adapters must implement."""
 

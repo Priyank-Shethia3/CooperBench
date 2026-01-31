@@ -5,6 +5,14 @@ import os
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def restore_cwd():
+    """Restore working directory after each test (prevents test pollution)."""
+    original = os.getcwd()
+    yield
+    os.chdir(original)
+
+
 def pytest_addoption(parser):
     """Add custom command line options."""
     parser.addoption(
@@ -18,6 +26,13 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "modal: tests that require Modal sandboxes (slow, requires network)")
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Ignore src directory during test collection."""
+    if "src" in collection_path.parts:
+        return True
+    return False
 
 
 def pytest_collection_modifyitems(config, items):
@@ -98,3 +113,12 @@ def sample_task_dir(tmp_path):
     (feature2_dir / "feature.md").write_text("# Feature 2\n\nImplement feature 2.")
 
     return task_dir
+
+
+@pytest.fixture
+def chdir_tmp(tmp_path):
+    """Change to tmp_path and restore original cwd afterward."""
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    yield tmp_path
+    os.chdir(original_cwd)

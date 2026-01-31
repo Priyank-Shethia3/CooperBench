@@ -76,7 +76,7 @@ Homepage = "https://cooperbench.com"
 Documentation = "https://cooperbench.com"
 Repository = "https://github.com/cooperbench/CooperBench"
 Issues = "https://github.com/cooperbench/CooperBench/issues"
-Dataset = "https://huggingface.co/datasets/cooperbench/cooperbench"
+Dataset = "https://huggingface.co/datasets/CodeConflict/cooperbench-dataset"
 Paper = "https://arxiv.org/abs/2601.13295"
 
 [build-system]
@@ -132,6 +132,11 @@ exclude = ["tests/", "src/cooperbench/agents/swe_agent/"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+# Don't collect test_ functions from imported source modules
+collect_ignore_glob = ["src/*"]
+norecursedirs = ["src", "dataset", "logs", ".git", "__pycache__"]
 
 [tool.coverage.run]
 source = ["src/cooperbench"]

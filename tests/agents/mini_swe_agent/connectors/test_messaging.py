@@ -1,4 +1,4 @@
-"""Tests for the messaging connector."""
+"""Tests for cooperbench.agents.mini_swe_agent.connectors.messaging module."""
 
 import pytest
 

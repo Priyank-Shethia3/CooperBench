@@ -1,4 +1,6 @@
-"""Tests for agent registry and adapters."""
+"""Tests for cooperbench.agents.registry module."""
+
+import inspect
 
 import pytest
 
@@ -53,8 +55,6 @@ class TestMiniSweAgentAdapter:
 
     def test_adapter_run_signature(self):
         """Test that run method has correct parameters."""
-        import inspect
-
         runner = get_runner("mini_swe_agent")
         sig = inspect.signature(runner.run)
         params = list(sig.parameters.keys())
