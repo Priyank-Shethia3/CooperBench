@@ -135,7 +135,7 @@ class ToolConfig(BaseModel):
     Unlike `install_commands`, these commands are part of the environment state.
     """
 
-    execution_timeout: int = 30
+    execution_timeout: int = 120
     """Timeout for executing commands in the environment"""
 
     install_timeout: int = 300

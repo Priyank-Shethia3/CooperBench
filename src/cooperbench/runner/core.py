@@ -124,7 +124,7 @@ def run(
         if result:
             if result.get("skipped"):
                 skipped = 1
-                console.print("  [dim]skipped (already completed)[/dim]")
+                console.print("[dim]→ skip[/dim] (already completed)")
             else:
                 completed = 1
                 total_cost = result.get("total_cost", 0)
@@ -280,15 +280,17 @@ def _run_with_progress(tasks: list, execute_task, concurrency: int) -> tuple:
                     total_cost += cost
                     results_list.append({"task": f"{task_name}/{feat_str}", "status": status, "cost": cost})
 
-                    status_color = {"done": "green", "skip": "dim", "failed": "red"}[status]
-                    progress.console.print(
-                        f"  [{status_color}]{status}[/{status_color}] {task_name} [dim][{feat_str}][/dim]"
-                    )
+                    status_display = {
+                        "done": "[green]✓ done[/green]",
+                        "skip": "[dim]→ done[/dim]",
+                        "failed": "[red]✗ failed[/red]",
+                    }[status]
+                    progress.console.print(f"{status_display} {task_name} [dim][{feat_str}][/dim]")
 
                 except Exception as e:
                     failed += 1
                     results_list.append({"task": f"{task_name}/{feat_str}", "status": "error", "error": str(e)})
-                    progress.console.print(f"  [red]error[/red] {task_name} [dim]{e}[/dim]")
+                    progress.console.print(f"[red]✗ error[/red] {task_name} [dim]{e}[/dim]")
 
                 progress.update(task_progress, advance=1)
 

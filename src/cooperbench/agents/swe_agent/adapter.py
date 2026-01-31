@@ -6,6 +6,11 @@ AgentRunner interface used by CooperBench.
 SWE-agent 1.0+ supports Modal execution through SWE-ReX.
 """
 
+import os
+
+os.environ.setdefault("SWE_AGENT_LOG_STREAM_LEVEL", "ERROR")
+os.environ.setdefault("SWE_REX_LOG_STREAM_LEVEL", "ERROR")
+
 import asyncio
 import tempfile
 from pathlib import Path
@@ -119,6 +124,14 @@ class SweAgentRunner:
             if "registry_variables" not in agent_yaml_config["tools"]:
                 agent_yaml_config["tools"]["registry_variables"] = {}
             agent_yaml_config["tools"]["registry_variables"]["ROOT"] = working_dir
+
+        # Gemini doesn't support cache_control with function calling, so remove it
+        if "gemini" in model_name.lower():
+            if "history_processors" in agent_yaml_config:
+                agent_yaml_config["history_processors"] = [
+                    hp for hp in agent_yaml_config["history_processors"]
+                    if hp.get("type") != "cache_control"
+                ]
 
         # Configure the model (SWE-agent uses litellm internally)
         model_config = GenericAPIModelConfig(

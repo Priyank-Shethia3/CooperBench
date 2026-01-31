@@ -1,5 +1,7 @@
 """Modal backend for evaluation."""
 
+from typing import Any
+
 import modal
 
 from cooperbench.eval.backends.base import ExecResult, Sandbox
@@ -8,7 +10,7 @@ from cooperbench.eval.backends.base import ExecResult, Sandbox
 class ModalExecResult:
     """Wrapper for Modal exec result."""
 
-    def __init__(self, result):
+    def __init__(self, result: Any) -> None:
         self._result = result
         self._stdout: str | None = None
         self._stderr: str | None = None

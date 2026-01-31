@@ -69,18 +69,18 @@ def evaluate(
         if result:
             if result.get("skipped"):
                 skipped = 1
-                console.print("  [dim]skipped (already evaluated)[/dim]")
+                console.print("[dim]→ skip[/dim] (already evaluated)")
             elif result.get("error"):
                 errors = 1
-                console.print(f"  [red]error:[/red] {result['error']}")
+                console.print(f"[red]✗ error[/red]: {result['error']}")
             elif result.get("both_passed"):
                 passed = 1
-                console.print("  [green]passed[/green] both features")
+                console.print("[green]✓ pass[/green] both features")
             else:
                 failed = 1
                 f1 = "[green]✓[/green]" if result.get("feature1", {}).get("passed") else "[red]✗[/red]"
                 f2 = "[green]✓[/green]" if result.get("feature2", {}).get("passed") else "[red]✗[/red]"
-                console.print(f"  [yellow]partial[/yellow] f1:{f1} f2:{f2}")
+                console.print(f"[yellow]✗ partial[/yellow] f1:{f1} f2:{f2}")
     else:
         # Multiple runs - show progress
         passed, failed, errors, skipped, results = _run_with_progress(runs, eval_run, concurrency)
@@ -214,20 +214,18 @@ def _run_with_progress(runs: list, eval_run, concurrency: int) -> tuple:
 
                     results.append({"run": f"{task_name}/{feat_str}", "status": status})
 
-                    status_style = {
-                        "pass": "green",
-                        "fail": "red",
-                        "skip": "dim",
-                        "error": "yellow",
+                    status_display = {
+                        "pass": "[green]✓ pass[/green]",
+                        "fail": "[red]✗ fail[/red]",
+                        "skip": "[dim]→ skip[/dim]",
+                        "error": "[yellow]✗ error[/yellow]",
                     }[status]
-                    progress.console.print(
-                        f"  [{status_style}]{status}[/{status_style}] {task_name} [dim][{feat_str}][/dim]"
-                    )
+                    progress.console.print(f"{status_display} {task_name} [dim][{feat_str}][/dim]")
 
                 except Exception as e:
                     errors += 1
                     results.append({"run": f"{task_name}/{feat_str}", "status": "error", "error": str(e)})
-                    progress.console.print(f"  [yellow]error[/yellow] {task_name} [dim]{e}[/dim]")
+                    progress.console.print(f"[yellow]✗ error[/yellow] {task_name} [dim]{e}[/dim]")
 
                 progress.update(eval_progress, advance=1)
 
