@@ -13,9 +13,8 @@ Or use as library:
 """
 
 from cooperbench.__about__ import __version__
-from cooperbench.evaluator import discover_runs, evaluate
+from cooperbench.eval import discover_runs, evaluate, evaluate_merge, test_merged, test_solo
 from cooperbench.runner import discover_tasks, run
-from cooperbench.sandbox import evaluate_merge, test_merged, test_solo
 
 __all__ = [
     "__version__",

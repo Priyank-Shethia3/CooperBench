@@ -1,13 +1,13 @@
-"""Unit tests for cooperbench.sandbox module.
+"""Unit tests for cooperbench.eval.sandbox module.
 
 These are pure function tests that don't require Modal.
-For integration tests, see tests/integration/test_sandbox.py
+For integration tests, see tests/integration/eval/test_sandbox.py
 """
 
 import tempfile
 from pathlib import Path
 
-from cooperbench.sandbox import (
+from cooperbench.eval.sandbox import (
     _error_result,
     _filter_test_files,
     _load_patch,
@@ -81,6 +81,40 @@ test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured
         result = _parse_results(output)
         assert result["passed"] == 4
         assert result["failed"] == 1
+
+    def test_parse_jest_passed_only(self):
+        """Test parsing jest output with only passed tests."""
+        output = """
+PASS  src/__tests__/useForm/handleSubmit.test.tsx
+  handleSubmit
+    ✓ should handle form submission (15 ms)
+    ✓ should validate fields (8 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       15 passed, 15 total
+Snapshots:   0 total
+Time:        2.345 s
+"""
+        result = _parse_results(output)
+        assert result["passed"] == 15
+        assert result["failed"] == 0
+
+    def test_parse_jest_mixed(self):
+        """Test parsing jest output with passed and failed tests."""
+        output = """
+FAIL  src/__tests__/useForm/handleSubmit.test.tsx
+  handleSubmit
+    ✓ should handle form submission (15 ms)
+    ✕ should validate fields (8 ms)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 15 passed, 17 total
+Snapshots:   0 total
+Time:        2.345 s
+"""
+        result = _parse_results(output)
+        assert result["passed"] == 15
+        assert result["failed"] == 2
 
     def test_parse_empty_output(self):
         """Test parsing empty output."""

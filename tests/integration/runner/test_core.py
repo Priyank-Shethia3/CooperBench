@@ -1,7 +1,7 @@
-"""Integration tests for cooperbench.runner module.
+"""Integration tests for cooperbench.runner.core module.
 
 These tests run actual agent tasks using Modal sandboxes.
-Run with: pytest tests/integration/test_runner.py --run-modal
+Run with: pytest tests/integration/runner/ --run-modal
 """
 
 import json
@@ -28,7 +28,7 @@ class TestRunSoloMode:
         task_dir.mkdir(parents=True)
 
         # Link to real dataset features
-        real_dataset = Path(__file__).parent.parent.parent / "dataset"
+        real_dataset = Path(__file__).parent.parent.parent.parent / "dataset"
         real_task = real_dataset / "llama_index_task" / "task17244"
 
         for feature_id in [1, 2]:
@@ -73,7 +73,7 @@ class TestRunCoopMode:
         task_dir.mkdir(parents=True)
 
         # Link to real dataset features
-        real_dataset = Path(__file__).parent.parent.parent / "dataset"
+        real_dataset = Path(__file__).parent.parent.parent.parent / "dataset"
         real_task = real_dataset / "llama_index_task" / "task17244"
 
         for feature_id in [1, 2]:

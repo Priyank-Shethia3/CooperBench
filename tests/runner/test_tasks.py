@@ -1,7 +1,6 @@
-"""Unit tests for cooperbench.runner (no Modal required)."""
+"""Unit tests for cooperbench.runner.tasks module."""
 
 import os
-from pathlib import Path
 
 from cooperbench.runner import discover_tasks
 
