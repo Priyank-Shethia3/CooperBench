@@ -1,6 +1,27 @@
+---
+license: mit
+task_categories:
+  - text-generation
+language:
+  - en
+tags:
+  - code
+  - benchmark
+  - multi-agent
+  - collaboration
+  - software-engineering
+pretty_name: CooperBench Dataset
+size_categories:
+  - n<1K
+---
+
 # CooperBench Dataset
 
-This directory contains the benchmark tasks for evaluating multi-agent coordination in code collaboration.
+This dataset contains the benchmark tasks for evaluating multi-agent coordination in code collaboration.
+
+**Paper**: [CooperBench: Why Coding Agents Cannot be Your Teammates Yet](https://arxiv.org/abs/2601.13295)  
+**Code**: [github.com/cooperbench/CooperBench](https://github.com/cooperbench/CooperBench)  
+**Website**: [cooperbench.com](https://cooperbench.com)
 
 ## Structure
 
