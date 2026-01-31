@@ -1,186 +1,184 @@
-"""
-Command-line interface for CooperBench.
+"""CooperBench CLI - benchmark runner.
 
-Provides the main CLI entry point for running experiments.
+Usage:
+    cooperbench run -n my-experiment --setting solo -r llama_index_task
+    cooperbench eval -n my-experiment --force
 """
 
 import argparse
-import asyncio
-import sys
-
-from cooperbench import BenchSetting, FileInterface
 
 
-def main() -> None:
+def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="cooperbench",
-        description="CooperBench: Multi-agent coordination benchmark for code collaboration",
+        description="CooperBench benchmark runner",
     )
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Plan command
-    plan_parser = subparsers.add_parser("plan", help="Run planning phase")
-    _add_common_args(plan_parser)
-    plan_parser.add_argument("--max-iterations", type=int, default=25, help="Max planning iterations")
-
-    # Execute command (placeholder)
-    exec_parser = subparsers.add_parser("execute", help="Run execution phase")
-    _add_common_args(exec_parser)
-    exec_parser.add_argument(
-        "--plan-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load plans from"
+    # === run command ===
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run benchmark tasks",
+        description="Run agents on CooperBench tasks",
+    )
+    run_parser.add_argument(
+        "-n",
+        "--name",
+        required=True,
+        help="Experiment name (used for log directory)",
+    )
+    run_parser.add_argument(
+        "-r",
+        "--repo",
+        help="Filter by repository name (e.g., llama_index_task)",
+    )
+    run_parser.add_argument(
+        "-t",
+        "--task",
+        type=int,
+        help="Filter by task ID",
+    )
+    run_parser.add_argument(
+        "-f",
+        "--features",
+        help="Specific feature pair to run, comma-separated (e.g., 1,2)",
+    )
+    run_parser.add_argument(
+        "-m",
+        "--model",
+        default="gemini/gemini-3-flash-preview",
+        help="LLM model to use (default: gemini/gemini-3-flash-preview)",
+    )
+    run_parser.add_argument(
+        "-a",
+        "--agent",
+        default="mini_swe_agent",
+        help="Agent framework to use (default: mini_swe_agent)",
+    )
+    run_parser.add_argument(
+        "-c",
+        "--concurrency",
+        type=int,
+        default=20,
+        help="Number of parallel tasks (default: 20)",
+    )
+    run_parser.add_argument(
+        "--setting",
+        choices=["coop", "solo"],
+        default="coop",
+        help="Benchmark setting: coop (2 agents) or solo (1 agent) (default: coop)",
+    )
+    run_parser.add_argument(
+        "--redis",
+        default="redis://localhost:6379",
+        help="Redis URL for inter-agent communication (default: redis://localhost:6379)",
+    )
+    run_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force rerun even if results exist",
+    )
+    run_parser.add_argument(
+        "--git",
+        action="store_true",
+        help="Enable git collaboration (agents can push/pull/merge via shared remote)",
+    )
+    run_parser.add_argument(
+        "--no-messaging",
+        action="store_true",
+        help="Disable messaging (send_message command)",
     )
 
-    # Evaluate command
-    eval_parser = subparsers.add_parser("evaluate", help="Run evaluation phase")
-    _add_common_args(eval_parser)
+    # === eval command ===
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Evaluate completed runs",
+        description="Evaluate agent runs from logs/ directory",
+    )
     eval_parser.add_argument(
-        "--patch-location", default="logs", choices=["logs", "cache", "hf"], help="Where to load patches from"
+        "-n",
+        "--name",
+        required=True,
+        help="Experiment name to evaluate",
     )
     eval_parser.add_argument(
-        "--eval-type",
-        default="test",
-        choices=["test", "merge"],
-        help="Evaluation type: test (single/solo) or merge (coop)",
+        "-r",
+        "--repo",
+        help="Filter by repository name",
     )
-
-    # Run command (plan + execute + evaluate)
-    run_parser = subparsers.add_parser("run", help="Run full pipeline: plan → execute → evaluate")
-    _add_common_args(run_parser)
-    run_parser.add_argument("--max-iterations", type=int, default=25, help="Max planning iterations")
+    eval_parser.add_argument(
+        "-t",
+        "--task",
+        type=int,
+        help="Filter by task ID",
+    )
+    eval_parser.add_argument(
+        "-f",
+        "--features",
+        help="Specific feature pair to evaluate, comma-separated (e.g., 1,2)",
+    )
+    eval_parser.add_argument(
+        "-c",
+        "--concurrency",
+        type=int,
+        default=10,
+        help="Number of parallel evaluations (default: 10)",
+    )
+    eval_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-evaluation even if eval.json exists",
+    )
 
     args = parser.parse_args()
 
-    if args.command is None:
-        parser.print_help()
-        sys.exit(1)
-
-    if args.command == "plan":
-        asyncio.run(_run_plan(args))
-    elif args.command == "execute":
-        asyncio.run(_run_execute(args))
-    elif args.command == "evaluate":
-        asyncio.run(_run_evaluate(args))
-    elif args.command == "run":
-        asyncio.run(_run_full(args))
+    if args.command == "run":
+        _run_command(args)
+    elif args.command == "eval":
+        _eval_command(args)
 
 
-def _add_common_args(parser: argparse.ArgumentParser) -> None:
-    """Add common arguments to a subparser."""
-    parser.add_argument(
-        "--setting",
-        "-s",
-        required=True,
-        choices=["single", "solo", "coop", "coop_ablation"],
-        help="Experiment setting mode",
-    )
-    parser.add_argument("--repo-name", required=True, type=str, help="Repository name")
-    parser.add_argument("--task-id", required=True, type=int, help="Task number")
-    parser.add_argument("--model1", "-m1", required=True, help="Model for first agent")
-    parser.add_argument("--model2", "-m2", help="Model for second agent (coop modes)")
-    parser.add_argument("--feature1-id", "-i", required=True, type=int, help="First feature ID")
-    parser.add_argument("--feature2-id", "-j", type=int, help="Second feature ID (non-single modes)")
-    parser.add_argument("--k", type=int, default=1, help="Experiment run identifier")
-    parser.add_argument("--save-to-hf", action="store_true", help="Save results to HuggingFace")
-    parser.add_argument("--create-pr", action="store_true", help="Create PR when saving to HF")
+def _run_command(args):
+    """Handle the 'run' subcommand."""
+    from cooperbench.runner import run
 
+    features = None
+    if args.features:
+        features = [int(f.strip()) for f in args.features.split(",")]
 
-async def _run_plan(args: argparse.Namespace) -> None:
-    """Run the planning phase."""
-    from cooperbench.planning import create_plan
-
-    setting = BenchSetting(args.setting)
-
-    file_interface = FileInterface(
-        setting=setting,
-        repo_name=args.repo_name,
-        task_id=args.task_id,
-        k=args.k,
-        feature1_id=args.feature1_id,
-        model1=args.model1,
-        feature2_id=args.feature2_id,
-        model2=args.model2,
-        save_to_hf=args.save_to_hf,
-        create_pr=args.create_pr,
+    run(
+        run_name=args.name,
+        repo=args.repo,
+        task_id=args.task,
+        features=features,
+        model_name=args.model,
+        agent=args.agent,
+        concurrency=args.concurrency,
+        setting=args.setting,
+        redis_url=args.redis,
+        force=args.force,
+        git_enabled=args.git,
+        messaging_enabled=not args.no_messaging,
     )
 
-    await create_plan(file_interface, args.max_iterations)
 
+def _eval_command(args):
+    """Handle the 'eval' subcommand."""
+    from cooperbench.evaluator import evaluate
 
-async def _run_execute(args: argparse.Namespace) -> None:
-    """Run the execution phase."""
-    from cooperbench.execution import create_execution
+    features = None
+    if args.features:
+        features = [int(f.strip()) for f in args.features.split(",")]
 
-    setting = BenchSetting(args.setting)
-
-    file_interface = FileInterface(
-        setting=setting,
-        repo_name=args.repo_name,
-        task_id=args.task_id,
-        k=args.k,
-        feature1_id=args.feature1_id,
-        model1=args.model1,
-        feature2_id=args.feature2_id,
-        model2=args.model2,
-        save_to_hf=args.save_to_hf,
-        create_pr=args.create_pr,
+    evaluate(
+        run_name=args.name,
+        repo=args.repo,
+        task_id=args.task,
+        features=features,
+        concurrency=args.concurrency,
+        force=args.force,
     )
-
-    await create_execution(file_interface, args.plan_location)
-
-
-async def _run_evaluate(args: argparse.Namespace) -> None:
-    """Run the evaluation phase."""
-    from cooperbench.evaluation import evaluate
-
-    setting = BenchSetting(args.setting)
-
-    file_interface = FileInterface(
-        setting=setting,
-        repo_name=args.repo_name,
-        task_id=args.task_id,
-        k=args.k,
-        feature1_id=args.feature1_id,
-        model1=args.model1,
-        feature2_id=args.feature2_id,
-        model2=args.model2,
-        save_to_hf=args.save_to_hf,
-        create_pr=args.create_pr,
-    )
-
-    await evaluate(file_interface, args.eval_type, args.patch_location)
-
-
-async def _run_full(args: argparse.Namespace) -> None:
-    """Run full pipeline: plan → execute → evaluate."""
-    from cooperbench.evaluation import evaluate
-    from cooperbench.execution import create_execution
-    from cooperbench.planning import create_plan
-
-    setting = BenchSetting(args.setting)
-    eval_type = "merge" if setting in (BenchSetting.COOP, BenchSetting.COOP_ABLATION) else "test"
-
-    file_interface = FileInterface(
-        setting=setting,
-        repo_name=args.repo_name,
-        task_id=args.task_id,
-        k=args.k,
-        feature1_id=args.feature1_id,
-        model1=args.model1,
-        feature2_id=args.feature2_id,
-        model2=args.model2,
-        save_to_hf=args.save_to_hf,
-        create_pr=args.create_pr,
-    )
-
-    print("\n[1/3] Planning...")
-    await create_plan(file_interface, args.max_iterations)
-
-    print("\n[2/3] Executing...")
-    await create_execution(file_interface, "logs")
-
-    print("\n[3/3] Evaluating...")
-    await evaluate(file_interface, eval_type, "logs")
 
 
 if __name__ == "__main__":
