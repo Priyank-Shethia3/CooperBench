@@ -135,7 +135,6 @@ addopts = "-v --tb=short"
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 # Don't collect test_ functions from imported source modules
-collect_ignore_glob = ["src/*"]
 norecursedirs = ["src", "dataset", "logs", ".git", "__pycache__"]
 
 [tool.coverage.run]
