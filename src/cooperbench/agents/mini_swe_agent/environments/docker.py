@@ -18,6 +18,7 @@ class DockerEnvironmentConfig(BaseModel):
     env: dict[str, str] = {}
     max_retries: int = 3
     retry_delay: float = 2.0
+    network: str | None = None
 
 
 class DockerEnvironment:
@@ -52,16 +53,20 @@ class DockerEnvironment:
         # Build environment variables
         env_vars = dict(self.config.env)
 
-        self.container = client.containers.run(
-            image=self.config.image,
-            command="sleep infinity",
-            detach=True,
-            working_dir=self.config.cwd,
-            environment=env_vars,
-            remove=False,
-            stdin_open=True,
-            tty=True,
-        )
+        run_kwargs = {
+            "image": self.config.image,
+            "command": "sleep infinity",
+            "detach": True,
+            "working_dir": self.config.cwd,
+            "environment": env_vars,
+            "remove": False,
+            "stdin_open": True,
+            "tty": True,
+        }
+        if self.config.network:
+            run_kwargs["network"] = self.config.network
+
+        self.container = client.containers.run(**run_kwargs)
         self.logger.debug(f"Container created: {self.container.id[:12]}")
 
     def get_template_vars(self) -> dict[str, Any]:

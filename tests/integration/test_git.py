@@ -8,14 +8,14 @@ import time
 
 import pytest
 
-from cooperbench.agents.mini_swe_agent.connectors import GitConnector, GitServer
+from cooperbench.agents.mini_swe_agent.connectors import GitConnector, ModalGitServer
 
 # Mark all tests in this module as requiring Modal
 pytestmark = pytest.mark.modal
 
 
 class SimpleEnv:
-    """Simple environment wrapper for testing."""
+    """Adapts Modal sandbox to match DockerEnvironment interface for GitConnector."""
 
     def __init__(self, sandbox, cwd: str = "/workspace/repo"):
         self.sb = sandbox
@@ -29,14 +29,14 @@ class SimpleEnv:
         return {"output": stdout + stderr, "returncode": proc.returncode}
 
 
-class TestGitServer:
-    """Tests for GitServer."""
+class TestModalGitServer:
+    """Tests for ModalGitServer (Modal backend)."""
 
     def test_create_server(self, modal_app):
         """Test creating a git server."""
         server = None
         try:
-            server = GitServer.create(app=modal_app, run_id="test-server-create")
+            server = ModalGitServer.create(app=modal_app, run_id="test-server-create")
             assert server is not None
             assert server.url is not None
             assert "git://" in server.url or server.url.endswith(".git")
@@ -48,7 +48,7 @@ class TestGitServer:
         """Test that server URL is valid."""
         server = None
         try:
-            server = GitServer.create(app=modal_app, run_id="test-url-format")
+            server = ModalGitServer.create(app=modal_app, run_id="test-url-format")
             # URL should be in git:// format
             url = server.url
             assert url.endswith("/repo.git") or url.endswith(".git")
@@ -57,13 +57,13 @@ class TestGitServer:
                 server.cleanup()
 
 
-class TestGitConnector:
-    """Tests for GitConnector."""
+class TestModalGitConnector:
+    """Tests for GitConnector with Modal environment."""
 
     @pytest.fixture
     def git_server(self, modal_app):
         """Create a shared git server for tests."""
-        server = GitServer.create(app=modal_app, run_id="test-connector")
+        server = ModalGitServer.create(app=modal_app, run_id="test-connector")
         yield server
         server.cleanup()
 
@@ -175,8 +175,8 @@ class TestGitConnector:
             sb2.terminate()
 
 
-class TestGitCollaborationE2E:
-    """End-to-end tests for git collaboration."""
+class TestModalGitCollaborationE2E:
+    """End-to-end tests for git collaboration on Modal."""
 
     def test_multi_agent_collaboration(self, modal_app):
         """Test that multiple agents can collaborate via git."""
@@ -192,7 +192,7 @@ class TestGitCollaborationE2E:
 
         try:
             # Create git server
-            server = GitServer.create(app=modal_app, run_id="test-multi-agent")
+            server = ModalGitServer.create(app=modal_app, run_id="test-multi-agent")
 
             # Create sandboxes for each agent
             for agent_id in agents:
