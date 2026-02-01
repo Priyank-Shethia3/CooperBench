@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 from platformdirs import user_config_dir
@@ -198,7 +197,6 @@ class GCPConfigurator:
                 timeout=10,
             )
             if result.returncode == 0 and result.stdout.strip():
-                account = result.stdout.strip().split("\n")[0]
                 gcloud_authed = True
         except subprocess.TimeoutExpired:
             pass
@@ -216,7 +214,7 @@ class GCPConfigurator:
             adc_authed = True
 
         if gcloud_authed and adc_authed:
-            console.print(f"[green]✓ Authenticated (gcloud + ADC)[/green]")
+            console.print("[green]✓ Authenticated (gcloud + ADC)[/green]")
             return True
         elif gcloud_authed and not adc_authed:
             console.print("[yellow]⚠ gcloud authenticated but ADC not set up[/yellow]")
@@ -350,11 +348,11 @@ class GCPConfigurator:
         default_zone = current_zone or "us-central1-a"
 
         console.print(
-            f"\nRecommended regions for low latency:\n"
-            f"  us-central1 (Iowa)\n"
-            f"  us-east1 (South Carolina)\n"
-            f"  europe-west1 (Belgium)\n"
-            f"  asia-east1 (Taiwan)\n"
+            "\nRecommended regions for low latency:\n"
+            "  us-central1 (Iowa)\n"
+            "  us-east1 (South Carolina)\n"
+            "  europe-west1 (Belgium)\n"
+            "  asia-east1 (Taiwan)\n"
         )
 
         region = Prompt.ask("GCP Region", default=default_region)
@@ -384,7 +382,7 @@ class GCPConfigurator:
             return True
 
         except Exception as e:
-            console.print(f"[red]✗ Failed[/red]")
+            console.print("[red]✗ Failed[/red]")
             console.print(f"\n[yellow]Error: {e}[/yellow]")
             console.print(
                 "\nMake sure you have:\n"
