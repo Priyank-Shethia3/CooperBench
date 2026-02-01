@@ -59,6 +59,10 @@ dependencies = [
 swe-agent = [
     "swe-agent>=1.0",
 ]
+gcp = [
+    "google-cloud-batch>=0.17",
+    "google-cloud-storage>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
@@ -66,7 +70,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.4",
 ]
-all = ["cooperbench[swe-agent,dev]"]
+all = ["cooperbench[swe-agent,gcp,dev]"]
 
 [project.scripts]
 cooperbench = "cooperbench.cli:main"
