@@ -27,12 +27,19 @@ def pytest_addoption(parser):
         default=False,
         help="Run tests that require Docker (requires local Docker daemon)",
     )
+    parser.addoption(
+        "--run-gcp",
+        action="store_true",
+        default=False,
+        help="Run tests that require GCP (requires GOOGLE_CLOUD_PROJECT and credentials)",
+    )
 
 
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "modal: tests that require Modal sandboxes (slow, requires network)")
     config.addinivalue_line("markers", "docker: tests that require Docker (requires local Docker daemon)")
+    config.addinivalue_line("markers", "gcp: tests that require GCP (requires GOOGLE_CLOUD_PROJECT and credentials)")
 
 
 def pytest_ignore_collect(collection_path, config):
@@ -43,18 +50,22 @@ def pytest_ignore_collect(collection_path, config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip Modal/Docker tests unless respective options are specified."""
+    """Skip Modal/Docker/GCP tests unless respective options are specified."""
     run_modal = config.getoption("--run-modal")
     run_docker = config.getoption("--run-docker")
+    run_gcp = config.getoption("--run-gcp")
 
     skip_modal = pytest.mark.skip(reason="need --run-modal option to run")
     skip_docker = pytest.mark.skip(reason="need --run-docker option to run")
+    skip_gcp = pytest.mark.skip(reason="need --run-gcp option to run")
 
     for item in items:
         if "modal" in item.keywords and not run_modal:
             item.add_marker(skip_modal)
         if "docker" in item.keywords and not run_docker:
             item.add_marker(skip_docker)
+        if "gcp" in item.keywords and not run_gcp:
+            item.add_marker(skip_gcp)
 
 
 @pytest.fixture(scope="session")
