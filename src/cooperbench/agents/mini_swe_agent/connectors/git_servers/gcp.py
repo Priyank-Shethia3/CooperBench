@@ -120,6 +120,17 @@ class GCPGitServer:
         if project:
             return project
 
+        # Try cooperbench config
+        try:
+            from cooperbench.config import ConfigManager
+
+            config = ConfigManager()
+            project = config.get("gcp_project_id")
+            if project:
+                return project
+        except Exception:
+            pass
+
         # Try gcloud config
         try:
             result = subprocess.run(
