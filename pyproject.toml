@@ -114,7 +114,6 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
-    "UP046",  # Generic[T] style (keep for compatibility)
 ]
 
 [tool.ruff.lint.isort]

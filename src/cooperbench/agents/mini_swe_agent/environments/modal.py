@@ -69,8 +69,8 @@ def _get_or_build_image(image_name: str) -> modal.Image:
         if image_name in _image_cache:
             return _image_cache[image_name]
 
-        # Build and cache
-        image = modal.Image.from_registry(image_name).entrypoint([])
+        # Build and cache (CACHE_BUST env forces new image hash) TODO: @arpan remove this after testing
+        image = modal.Image.from_registry(image_name).entrypoint([]).env({"COOPERBENCH_CACHE": "v4"})
         _image_cache[image_name] = image
         return image
 

@@ -1,8 +1,10 @@
 FROM node:22-slim
 
-# Install git and other required tools
+# Install git, Python (for Modal compatibility), and other required tools
 RUN apt-get update && apt-get install -y \
     git \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pnpm globally
@@ -24,4 +26,3 @@ COPY runner.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/runner.sh
 
 ENTRYPOINT ["/usr/local/bin/runner.sh"]
-
