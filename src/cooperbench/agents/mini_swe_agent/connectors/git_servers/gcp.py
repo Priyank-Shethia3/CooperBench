@@ -100,9 +100,8 @@ class GCPGitServer:
         instance._create_git_server_vm(machine_type)
         instance._wait_for_ssh()
 
-        # Create firewall rule if using VPC
-        if network:
-            instance._create_firewall_rule()
+        # Create firewall rule to allow git protocol traffic
+        instance._create_firewall_rule()
 
         # Get the git URL (internal IP if VPC, external IP otherwise)
         ip_address = instance._get_vm_ip(use_internal=network is not None)
@@ -378,7 +377,10 @@ echo "Git daemon started"
 
         firewall = compute_v1.Firewall()
         firewall.name = firewall_name
-        firewall.network = f"projects/{self._project_id}/global/networks/{self._network}"
+
+        # Use specified VPC or default network
+        network_name = self._network or "default"
+        firewall.network = f"projects/{self._project_id}/global/networks/{network_name}"
 
         # Allow TCP port 9418 (git daemon)
         allowed = compute_v1.Allowed()
@@ -386,8 +388,11 @@ echo "Git daemon started"
         allowed.ports = ["9418"]
         firewall.allowed = [allowed]
 
-        # Allow from internal VPC ranges
-        firewall.source_ranges = ["10.0.0.0/8"]
+        # Source ranges: internal only for VPC, anywhere for external mode
+        if self._network:
+            firewall.source_ranges = ["10.0.0.0/8"]
+        else:
+            firewall.source_ranges = ["0.0.0.0/0"]
 
         # Target only this VM
         firewall.target_tags = [f"cooperbench-git-{self._vm_name}"]
