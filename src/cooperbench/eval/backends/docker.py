@@ -1,6 +1,7 @@
 """Docker backend for evaluation."""
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 import docker
 from docker.models.containers import Container
