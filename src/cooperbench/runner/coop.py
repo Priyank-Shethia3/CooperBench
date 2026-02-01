@@ -53,7 +53,9 @@ def execute_coop(
     git_server_url = None
     if git_enabled:
         if backend == "docker":
-            raise ValueError("Git collaboration is not supported with Docker backend. Use --backend modal or disable --git.")
+            raise ValueError(
+                "Git collaboration is not supported with Docker backend. Use --backend modal or disable --git."
+            )
         if not quiet:
             console.print("  [dim]git[/dim] creating shared server...")
         app = modal.App.lookup("cooperbench", create_if_missing=True)
