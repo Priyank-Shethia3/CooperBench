@@ -11,6 +11,7 @@ from cooperbench.agents.mini_swe_agent.agents.default import DefaultAgent
 from cooperbench.agents.mini_swe_agent.config import get_config_path
 from cooperbench.agents.mini_swe_agent.connectors.git import GitConnector
 from cooperbench.agents.mini_swe_agent.connectors.messaging import MessagingConnector
+from cooperbench.agents.mini_swe_agent.environments.docker import DockerEnvironment
 from cooperbench.agents.mini_swe_agent.environments.modal import ModalEnvironment
 from cooperbench.agents.mini_swe_agent.models.litellm_model import LitellmModel
 from cooperbench.agents.registry import register
@@ -51,20 +52,31 @@ class MiniSweAgentRunner:
         Returns:
             AgentResult with status, patch, cost, steps, messages
         """
-        # Load default config if not provided
-        if config is None:
-            config_path = get_config_path("mini")
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
+        # Always load default config, then merge with any overrides
+        config_path = get_config_path("mini")
+        with open(config_path) as f:
+            default_config = yaml.safe_load(f)
 
-        agent_config = config.get("agent", {})
+        # Merge passed config overrides into default config
+        if config is not None:
+            default_config.update(config)
 
-        # Create Modal sandbox
-        env = ModalEnvironment(
-            image=image,
-            cwd="/workspace/repo",
-            timeout=3600,
-        )
+        agent_config = default_config.get("agent", {})
+        backend = default_config.get("backend", "modal")
+
+        # Create sandbox environment based on backend
+        if backend == "docker":
+            env = DockerEnvironment(
+                image=image,
+                cwd="/workspace/repo",
+                timeout=3600,
+            )
+        else:
+            env = ModalEnvironment(
+                image=image,
+                cwd="/workspace/repo",
+                timeout=3600,
+            )
 
         # Capture base commit for patch generation
         base_commit_result = env.execute("git rev-parse HEAD", timeout=10)
@@ -127,7 +139,7 @@ class MiniSweAgentRunner:
             error=error_msg,
         )
 
-    def _get_patch(self, env: ModalEnvironment, base_commit: str) -> str:
+    def _get_patch(self, env: ModalEnvironment | DockerEnvironment, base_commit: str) -> str:
         """Extract git diff from base commit to current working tree state."""
         try:
             # Single diff from base commit to working tree (includes both

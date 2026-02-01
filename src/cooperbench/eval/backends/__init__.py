@@ -1,9 +1,10 @@
 """Evaluation backends - Modal, Docker, GCP Batch, etc."""
 
 from cooperbench.eval.backends.base import EvalBackend, ExecResult, Sandbox
+from cooperbench.eval.backends.docker import DockerBackend
 from cooperbench.eval.backends.modal import ModalBackend
 
-__all__ = ["EvalBackend", "Sandbox", "ExecResult", "ModalBackend"]
+__all__ = ["EvalBackend", "Sandbox", "ExecResult", "ModalBackend", "DockerBackend"]
 
 
 def get_backend(name: str = "modal") -> EvalBackend:
@@ -17,6 +18,7 @@ def get_backend(name: str = "modal") -> EvalBackend:
     """
     backends = {
         "modal": ModalBackend,
+        "docker": DockerBackend,
     }
     if name not in backends:
         available = ", ".join(sorted(backends.keys()))

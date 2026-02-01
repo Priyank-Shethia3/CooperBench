@@ -21,6 +21,7 @@ def evaluate(
     features: list[int] | None = None,
     concurrency: int = 10,
     force: bool = False,
+    backend: str = "modal",
 ) -> None:
     """Evaluate completed runs.
 
@@ -32,6 +33,7 @@ def evaluate(
         features: Specific feature pair to evaluate
         concurrency: Number of parallel evaluations
         force: Force re-evaluation even if eval.json exists
+        backend: Execution backend ("modal" or "docker")
     """
     runs = discover_runs(
         run_name=run_name,
@@ -60,7 +62,7 @@ def evaluate(
     skipped = 0
 
     def eval_run(run_info: dict) -> dict | None:
-        return _evaluate_single(run_info, force=force)
+        return _evaluate_single(run_info, force=force, backend=backend)
 
     if is_single:
         # Single run - show detailed output
@@ -94,7 +96,7 @@ def evaluate(
     _print_summary(passed, failed, errors, skipped, len(runs))
 
 
-def _evaluate_single(run_info: dict, force: bool = False) -> dict | None:
+def _evaluate_single(run_info: dict, force: bool = False, backend: str = "modal") -> dict | None:
     """Evaluate a single run."""
     log_dir = Path(run_info["log_dir"])
     eval_file = log_dir / "eval.json"
@@ -120,6 +122,7 @@ def _evaluate_single(run_info: dict, force: bool = False) -> dict | None:
             feature1_id=f1,
             feature2_id=f2,
             patch=patch,
+            backend=backend,
         )
 
         eval_result = {
@@ -149,6 +152,7 @@ def _evaluate_single(run_info: dict, force: bool = False) -> dict | None:
             feature2_id=f2,
             patch1=patch1,
             patch2=patch2,
+            backend=backend,
         )
 
         eval_result = {

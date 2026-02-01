@@ -128,6 +128,12 @@ def main():
         default=10,
         help="Number of parallel evaluations when using --auto-eval (default: 10)",
     )
+    run_parser.add_argument(
+        "--backend",
+        choices=["modal", "docker"],
+        default="modal",
+        help="Execution backend: modal (cloud) or docker (local) (default: modal)",
+    )
 
     # === eval command ===
     eval_parser = subparsers.add_parser(
@@ -173,6 +179,12 @@ def main():
         action="store_true",
         help="Force re-evaluation even if eval.json exists",
     )
+    eval_parser.add_argument(
+        "--backend",
+        choices=["modal", "docker"],
+        default="modal",
+        help="Execution backend: modal (cloud) or docker (local) (default: modal)",
+    )
 
     args = parser.parse_args()
 
@@ -217,6 +229,7 @@ def _run_command(args):
         messaging_enabled=not args.no_messaging,
         auto_eval=args.auto_eval,
         eval_concurrency=args.eval_concurrency,
+        backend=args.backend,
     )
 
 
@@ -240,6 +253,7 @@ def _eval_command(args):
         features=features,
         concurrency=args.concurrency,
         force=args.force,
+        backend=args.backend,
     )
 
 
