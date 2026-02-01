@@ -5,7 +5,9 @@ RUN apt-get update && apt-get install -y \
     git \
     python3 \
     python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && rm -f /usr/lib/python3.*/EXTERNALLY-MANAGED
 
 # Install pnpm globally
 RUN npm install -g pnpm
