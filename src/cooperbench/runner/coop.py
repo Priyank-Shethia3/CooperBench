@@ -26,6 +26,7 @@ def execute_coop(
     quiet: bool = False,
     git_enabled: bool = False,
     messaging_enabled: bool = True,
+    backend: str = "modal",
 ) -> dict | None:
     """Execute a cooperative task (two agents, separate features)."""
     n_agents = len(features)
@@ -51,6 +52,10 @@ def execute_coop(
     git_server = None
     git_server_url = None
     if git_enabled:
+        if backend == "docker":
+            raise ValueError(
+                "Git collaboration is not supported with Docker backend. Use --backend modal or disable --git."
+            )
         if not quiet:
             console.print("  [dim]git[/dim] creating shared server...")
         app = modal.App.lookup("cooperbench", create_if_missing=True)
@@ -77,6 +82,7 @@ def execute_coop(
                 git_enabled=git_enabled,
                 messaging_enabled=messaging_enabled,
                 quiet=quiet,
+                backend=backend,
             )
         except Exception as e:
             results[agent_id] = {
@@ -205,6 +211,7 @@ def _spawn_agent(
     git_enabled: bool = False,
     messaging_enabled: bool = True,
     quiet: bool = False,
+    backend: str = "modal",
 ) -> dict:
     """Spawn a single agent on a feature using the agent framework adapter."""
     task_dir = Path("dataset") / repo_name / f"task{task_id}"
@@ -231,6 +238,7 @@ def _spawn_agent(
         git_server_url=git_server_url,
         git_enabled=git_enabled,
         messaging_enabled=messaging_enabled,
+        config={"backend": backend},
     )
 
     return {

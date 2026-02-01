@@ -53,6 +53,7 @@ def run(
     messaging_enabled: bool = True,
     auto_eval: bool = False,
     eval_concurrency: int = 10,
+    backend: str = "modal",
 ) -> None:
     """Run benchmark tasks.
 
@@ -72,6 +73,7 @@ def run(
         messaging_enabled: Enable messaging (send_message command)
         auto_eval: Automatically evaluate runs after completion
         eval_concurrency: Max parallel evaluations (default: 10)
+        backend: Execution backend ("modal" or "docker")
     """
     # Install cleanup handler to terminate Modal sandboxes on Ctrl+C
     if install_cleanup_handler:
@@ -118,6 +120,7 @@ def run(
                 model_name=model_name,
                 force=force,
                 quiet=not is_single,
+                backend=backend,
             )
         else:
             return execute_coop(
@@ -132,6 +135,7 @@ def run(
                 quiet=not is_single,
                 git_enabled=git_enabled,
                 messaging_enabled=messaging_enabled,
+                backend=backend,
             )
 
     eval_stats = None

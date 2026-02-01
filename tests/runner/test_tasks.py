@@ -92,46 +92,31 @@ class TestDiscoverTasks:
 class TestLoadSubset:
     """Tests for load_subset function."""
 
-    def test_load_lite_subset(self):
-        """Test loading the lite subset."""
+    def test_lite_benchmark_split_is_stable(self):
+        """Verify lite benchmark split hasn't changed - this is a frozen evaluation set."""
         tasks = load_subset("lite")
-        assert len(tasks) == 7
-        assert all(isinstance(t, tuple) and len(t) == 2 for t in tasks)
-        # Check some expected tasks
-        assert ("pillow_task", 25) in tasks
-        assert ("dspy_task", 8394) in tasks
+        expected_tasks = {
+            ("pillow_task", 25),
+            ("huggingface_datasets_task", 6252),
+            ("react_hook_form_task", 85),
+            ("llama_index_task", 17244),
+            ("dottxt_ai_outlines_task", 1706),
+            ("go_chi_task", 27),
+            ("dspy_task", 8394),
+        }
+        assert set(tasks) == expected_tasks, "Lite benchmark split changed - this breaks reproducibility!"
+        # Also verify discover_tasks generates expected 100 pairs
+        discovered = discover_tasks(subset="lite")
+        assert len(discovered) == 100, "Lite subset should generate exactly 100 feature pairs"
 
     def test_load_nonexistent_subset_raises(self):
         """Test that loading nonexistent subset raises ValueError."""
         with pytest.raises(ValueError, match="not found"):
             load_subset("nonexistent_subset_xyz")
 
-    def test_subset_returns_repo_task_tuples(self):
-        """Test that subset returns (repo, task_id) tuples."""
-        tasks = load_subset("lite")
-        for repo, task_id in tasks:
-            assert isinstance(repo, str)
-            assert isinstance(task_id, int)
-            assert repo.endswith("_task") or repo == "typst"
-
 
 class TestDiscoverTasksWithSubset:
     """Tests for discover_tasks with subset filtering."""
-
-    def test_discover_with_lite_subset(self):
-        """Test discovering tasks with lite subset."""
-        tasks = discover_tasks(subset="lite")
-        # Lite has 100 pairs
-        assert len(tasks) == 100
-
-    def test_subset_filters_repos(self):
-        """Test that subset filters to only repos in subset."""
-        tasks = discover_tasks(subset="lite")
-        repos = {t["repo"] for t in tasks}
-        # Lite subset has 7 repos
-        assert len(repos) == 7
-        assert "pillow_task" in repos
-        assert "dspy_task" in repos
 
     def test_subset_with_repo_filter(self):
         """Test combining subset with repo filter."""

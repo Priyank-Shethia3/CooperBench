@@ -18,6 +18,7 @@ def execute_solo(
     model_name: str = "gemini/gemini-3-flash-preview",
     force: bool = False,
     quiet: bool = False,
+    backend: str = "modal",
 ) -> dict | None:
     """Execute a solo task (one agent, multiple features)."""
     run_id = uuid.uuid4().hex[:8]
@@ -42,6 +43,7 @@ def execute_solo(
             agent_name=agent_name,
             model_name=model_name,
             quiet=quiet,
+            backend=backend,
         )
     except Exception as e:
         result = {
@@ -128,6 +130,7 @@ def _spawn_solo_agent(
     agent_name: str,
     model_name: str,
     quiet: bool = False,
+    backend: str = "modal",
 ) -> dict:
     """Spawn a single agent on multiple features (solo mode)."""
     task_dir = Path("dataset") / repo_name / f"task{task_id}"
@@ -159,6 +162,7 @@ def _spawn_solo_agent(
         git_server_url=None,
         git_enabled=False,
         messaging_enabled=False,
+        config={"backend": backend},
     )
 
     return {
