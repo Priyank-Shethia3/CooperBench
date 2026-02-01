@@ -10,7 +10,7 @@ from pathlib import Path
 import modal
 
 from cooperbench.agents import get_runner
-from cooperbench.agents.mini_swe_agent.connectors.git import GitServer
+from cooperbench.agents.mini_swe_agent.connectors.git import DockerGitServer, GitServer
 from cooperbench.utils import console, get_image_name
 
 
@@ -51,15 +51,16 @@ def execute_coop(
     # Create git server if enabled
     git_server = None
     git_server_url = None
+    git_network = None
     if git_enabled:
-        if backend == "docker":
-            raise ValueError(
-                "Git collaboration is not supported with Docker backend. Use --backend modal or disable --git."
-            )
         if not quiet:
             console.print("  [dim]git[/dim] creating shared server...")
-        app = modal.App.lookup("cooperbench", create_if_missing=True)
-        git_server = GitServer.create(app=app, run_id=run_id)
+        if backend == "docker":
+            git_server = DockerGitServer.create(run_id=run_id)
+            git_network = git_server.network_name
+        else:
+            app = modal.App.lookup("cooperbench", create_if_missing=True)
+            git_server = GitServer.create(app=app, run_id=run_id)
         git_server_url = git_server.url
         if not quiet:
             console.print(f"  [dim]git[/dim] [green]ready[/green] {git_server_url}")
@@ -80,6 +81,7 @@ def execute_coop(
                 redis_url=namespaced_redis if messaging_enabled and n_agents > 1 else None,
                 git_server_url=git_server_url,
                 git_enabled=git_enabled,
+                git_network=git_network,
                 messaging_enabled=messaging_enabled,
                 quiet=quiet,
                 backend=backend,
@@ -209,6 +211,7 @@ def _spawn_agent(
     redis_url: str | None = None,
     git_server_url: str | None = None,
     git_enabled: bool = False,
+    git_network: str | None = None,
     messaging_enabled: bool = True,
     quiet: bool = False,
     backend: str = "modal",
@@ -228,6 +231,9 @@ def _spawn_agent(
 
     # Use the agent framework adapter
     runner = get_runner(agent_name)
+    config = {"backend": backend}
+    if git_network:
+        config["git_network"] = git_network
     result = runner.run(
         task=task,
         image=image,
@@ -238,7 +244,7 @@ def _spawn_agent(
         git_server_url=git_server_url,
         git_enabled=git_enabled,
         messaging_enabled=messaging_enabled,
-        config={"backend": backend},
+        config=config,
     )
 
     return {

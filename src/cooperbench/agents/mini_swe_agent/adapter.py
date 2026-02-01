@@ -73,11 +73,15 @@ class MiniSweAgentRunner:
             # Lazy import to avoid requiring docker package when not used
             from cooperbench.agents.mini_swe_agent.environments.docker import DockerEnvironment
 
-            env = DockerEnvironment(
-                image=image,
-                cwd="/workspace/repo",
-                timeout=3600,
-            )
+            env_kwargs = {
+                "image": image,
+                "cwd": "/workspace/repo",
+                "timeout": 3600,
+            }
+            # Join git network if provided
+            if config and config.get("git_network"):
+                env_kwargs["network"] = config["git_network"]
+            env = DockerEnvironment(**env_kwargs)
         else:
             env = ModalEnvironment(
                 image=image,
