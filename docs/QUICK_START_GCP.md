@@ -22,11 +22,11 @@ uv run cooperbench config gcp
 ```
 
 The wizard will:
-- ✓ Check if gcloud CLI is installed
-- ✓ Verify Python dependencies
-- 🔐 Guide you through authentication
-- 📝 Help you select project, region, and zone
-- ✅ Validate your setup
+- Check if gcloud CLI is installed
+- Verify Python dependencies
+- Guide you through authentication
+- Help you select project, region, and zone
+- Validate your setup
 
 **That's it!** Configuration is saved automatically.
 

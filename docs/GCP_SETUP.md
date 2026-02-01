@@ -153,12 +153,19 @@ uv run cooperbench eval --backend gcp \
 
 ### Custom VM Images
 
-For faster evaluation, you can create custom VM images with pre-pulled Docker images:
+For faster evaluation, you can create custom VM images with pre-pulled Docker images.
 
+Use the provided build script:
+```bash
+scripts/build_gcp_vm_image.sh
+```
+
+This script will:
 1. Create a VM with Container-Optimized OS
 2. Pull all CooperBench Docker images
 3. Create an image from the VM
-4. Set the image in configuration:
+
+Then set the image in configuration:
 
 ```bash
 export COOPERBENCH_VM_IMAGE="cooperbench-eval"
@@ -175,16 +182,18 @@ evaluator = GCPBatchEvaluator(
 
 ### Custom VPC Network
 
-For multi-agent git collaboration:
+For multi-agent git collaboration (optional):
 
 ```python
 from cooperbench.agents.mini_swe_agent.environments.gcp import GCPEnvironment
 
 env = GCPEnvironment(
     image="python:3.11",
-    network="cooperbench-vpc"  # Your VPC network
+    network="cooperbench-vpc"  # Optional: Your VPC network for agent communication
 )
 ```
+
+Note: VPC networking is only required for git-based collaboration between agents. For solo runs or Redis-based messaging, the default network is sufficient.
 
 ### Region Selection
 
