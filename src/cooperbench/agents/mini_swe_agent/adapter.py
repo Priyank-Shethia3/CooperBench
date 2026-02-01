@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from cooperbench.agents.mini_swe_agent.environments.docker import DockerEnvironment
 from cooperbench.agents.mini_swe_agent.agents.default import DefaultAgent
 from cooperbench.agents.mini_swe_agent.config import get_config_path
-from cooperbench.agents.mini_swe_agent.connectors.git import GitConnector
+from cooperbench.agents.mini_swe_agent.connectors import GitConnector
 from cooperbench.agents.mini_swe_agent.connectors.messaging import MessagingConnector
 from cooperbench.agents.mini_swe_agent.environments.modal import ModalEnvironment
 from cooperbench.agents.mini_swe_agent.models.litellm_model import LitellmModel

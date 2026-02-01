@@ -42,6 +42,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "docker>=7.0",
     "jinja2>=3.0",
     "litellm>=1.0",
     "modal>=0.70",
@@ -58,9 +59,6 @@ dependencies = [
 swe-agent = [
     "swe-agent>=1.0",
 ]
-docker = [
-    "docker>=7.0",
-]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
@@ -68,7 +66,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.4",
 ]
-all = ["cooperbench[swe-agent,docker,dev]"]
+all = ["cooperbench[swe-agent,dev]"]
 
 [project.scripts]
 cooperbench = "cooperbench.cli:main"

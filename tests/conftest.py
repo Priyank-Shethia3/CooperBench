@@ -21,11 +21,18 @@ def pytest_addoption(parser):
         default=False,
         help="Run tests that require Modal sandboxes (slow, network)",
     )
+    parser.addoption(
+        "--run-docker",
+        action="store_true",
+        default=False,
+        help="Run tests that require Docker (requires local Docker daemon)",
+    )
 
 
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "modal: tests that require Modal sandboxes (slow, requires network)")
+    config.addinivalue_line("markers", "docker: tests that require Docker (requires local Docker daemon)")
 
 
 def pytest_ignore_collect(collection_path, config):
@@ -36,14 +43,18 @@ def pytest_ignore_collect(collection_path, config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip Modal tests unless --run-modal is specified."""
-    if config.getoption("--run-modal"):
-        return
+    """Skip Modal/Docker tests unless respective options are specified."""
+    run_modal = config.getoption("--run-modal")
+    run_docker = config.getoption("--run-docker")
 
     skip_modal = pytest.mark.skip(reason="need --run-modal option to run")
+    skip_docker = pytest.mark.skip(reason="need --run-docker option to run")
+
     for item in items:
-        if "modal" in item.keywords:
+        if "modal" in item.keywords and not run_modal:
             item.add_marker(skip_modal)
+        if "docker" in item.keywords and not run_docker:
+            item.add_marker(skip_docker)
 
 
 @pytest.fixture(scope="session")
