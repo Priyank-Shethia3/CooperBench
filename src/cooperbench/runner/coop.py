@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import modal
+import yaml
 
 from cooperbench.agents import get_runner
 from cooperbench.agents.mini_swe_agent.connectors import create_git_server
@@ -238,11 +239,22 @@ def _spawn_agent(
     if not quiet:
         console.print(f"  [dim]{agent_id}[/dim] starting...")
 
-    # Use the agent framework adapter
-    runner = get_runner(agent_name)
+    # Load agent config file if provided
     config = {"backend": backend}
     if git_network:
         config["git_network"] = git_network
+    if agent_config:
+        config_path = Path(agent_config)
+        if config_path.exists():
+            with open(config_path) as f:
+                agent_config_dict = yaml.safe_load(f)
+                if agent_config_dict:
+                    config.update(agent_config_dict)
+        else:
+            raise FileNotFoundError(f"Agent config file not found: {agent_config}")
+
+    # Use the agent framework adapter
+    runner = get_runner(agent_name)
     result = runner.run(
         task=task,
         image=image,
@@ -254,7 +266,6 @@ def _spawn_agent(
         git_enabled=git_enabled,
         messaging_enabled=messaging_enabled,
         config=config,
-        agent_config=agent_config,
     )
 
     return {

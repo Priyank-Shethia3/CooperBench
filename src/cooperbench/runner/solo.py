@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 from cooperbench.agents import get_runner
 from cooperbench.utils import console, get_image_name
 
@@ -161,6 +163,18 @@ def _spawn_solo_agent(
     if not quiet:
         console.print("  [dim]solo[/dim] starting...")
 
+    # Load agent config file if provided
+    config = {"backend": backend}
+    if agent_config:
+        config_path = Path(agent_config)
+        if config_path.exists():
+            with open(config_path) as f:
+                agent_config_dict = yaml.safe_load(f)
+                if agent_config_dict:
+                    config.update(agent_config_dict)
+        else:
+            raise FileNotFoundError(f"Agent config file not found: {agent_config}")
+
     # Use the agent framework adapter
     runner = get_runner(agent_name)
     result = runner.run(
@@ -174,8 +188,7 @@ def _spawn_solo_agent(
         git_server_url=None,
         git_enabled=False,
         messaging_enabled=False,
-        config={"backend": backend},
-        agent_config=agent_config,
+        config=config,
     )
 
     return {
