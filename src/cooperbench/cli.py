@@ -112,7 +112,7 @@ def main():
         "-c",
         "--concurrency",
         type=int,
-        default=20,
+        default=40,
         help="Number of parallel tasks (default: 20)",
     )
     run_parser.add_argument(
