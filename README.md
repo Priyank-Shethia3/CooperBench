@@ -49,17 +49,23 @@ GEMINI_API_KEY=your_key
 
 #### Option 2: GCP (Recommended for Scale)
 
-1. **Install GCP dependencies**:
+**Prerequisites**: Install [gcloud CLI](https://cloud.google.com/sdk/docs/install) first
+- macOS: `brew install google-cloud-sdk`
+- Linux: `curl https://sdk.cloud.google.com | bash`
+
+**Setup**:
 ```bash
+# 1. Install GCP dependencies
 pip install 'cooperbench[gcp]'
-```
 
-2. **Run configuration wizard**:
-```bash
+# 2. Run configuration wizard (handles authentication, project setup, validation)
 cooperbench config gcp
+
+# 3. You're ready to run experiments!
+cooperbench run --backend gcp -s lite
 ```
 
-3. **Redis** and **LLM API keys**: Same as above
+**Also needed**: Redis and LLM API keys (same as Option 1)
 
 See [GCP Setup Guide](docs/GCP_SETUP.md) for detailed instructions.
 
