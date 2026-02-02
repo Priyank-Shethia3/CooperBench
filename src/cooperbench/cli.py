@@ -44,6 +44,26 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # === config command ===
+    config_parser = subparsers.add_parser(
+        "config",
+        help="Configure execution backends",
+        description="Interactive configuration wizards for backends (GCP, Modal, etc.)",
+    )
+    config_subparsers = config_parser.add_subparsers(dest="backend", required=True)
+
+    # config gcp
+    gcp_config_parser = config_subparsers.add_parser(
+        "gcp",
+        help="Configure GCP backend",
+        description="Set up Google Cloud Platform as execution backend",
+    )
+    gcp_config_parser.add_argument(
+        "--skip-tests",
+        action="store_true",
+        help="Skip validation tests (faster setup, but no verification)",
+    )
+
     # === run command ===
     run_parser = subparsers.add_parser(
         "run",
@@ -192,10 +212,21 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "run":
+    if args.command == "config":
+        _config_command(args)
+    elif args.command == "run":
         _run_command(args)
     elif args.command == "eval":
         _eval_command(args)
+
+
+def _config_command(args):
+    """Handle the 'config' subcommand."""
+    from cooperbench.config import config_gcp_command
+
+    if args.backend == "gcp":
+        exit_code = config_gcp_command(skip_tests=args.skip_tests)
+        sys.exit(exit_code)
 
 
 def _run_command(args):
