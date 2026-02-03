@@ -33,6 +33,9 @@ class AgentResult:
     messages: list[dict[str, Any]] = field(default_factory=list)
     """Full conversation trajectory for analysis."""
 
+    sent_messages: list[dict[str, Any]] = field(default_factory=list)
+    """Inter-agent messages sent during the run (for tool-based agents)."""
+
     error: str | None = None
     """Error message if status is 'Error'."""
 

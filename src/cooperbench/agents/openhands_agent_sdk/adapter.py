@@ -2,11 +2,16 @@
 
 This adapter runs the OpenHands agent-server in Modal and connects to it
 using the SDK's RemoteWorkspace.
+
+For coop mode, it creates a shared ModalRedisServer for inter-agent messaging.
+The adapter handles its own infrastructure - no external Redis needed.
 """
 
 import os
 import time
 import logging
+import threading
+import json
 from typing import Any
 
 import modal
@@ -16,8 +21,101 @@ from cooperbench.agents.registry import register
 logger = logging.getLogger(__name__)
 
 
-# Modal app for running agent-server
+# Modal app for running agent-server and infrastructure
 modal_app = modal.App("cooperbench-openhands")
+
+# Module-level registry for shared Redis servers (keyed by run_id)
+# This allows multiple parallel agents in the same coop run to share one Redis
+_redis_servers: dict[str, Any] = {}  # run_id -> ModalRedisServer
+_redis_lock = threading.Lock()
+_redis_refcount: dict[str, int] = {}  # run_id -> number of agents using it
+
+
+def _get_or_create_redis(run_id: str, agents: list[str], timeout: int = 3600) -> str:
+    """Get or create a shared ModalRedisServer for a coop run.
+    
+    Thread-safe: First agent to call this creates the server, others reuse it.
+    Returns the Redis URL that all agents can connect to.
+    """
+    from cooperbench.agents.openhands_agent_sdk.connectors import ModalRedisServer
+    
+    with _redis_lock:
+        if run_id not in _redis_servers:
+            logger.info(f"[{run_id}] Creating shared ModalRedisServer...")
+            app = modal.App.lookup("cooperbench-openhands-v8", create_if_missing=True)
+            server = ModalRedisServer.create(
+                app=app,
+                run_id=run_id,
+                agents=agents,
+                timeout=timeout,
+            )
+            _redis_servers[run_id] = server
+            _redis_refcount[run_id] = 0
+            logger.info(f"[{run_id}] Redis server ready at {server.url}")
+        
+        _redis_refcount[run_id] += 1
+        return _redis_servers[run_id].url
+
+
+def _release_redis(run_id: str) -> None:
+    """Release a reference to the shared Redis server.
+    
+    When refcount reaches 0, the server is cleaned up.
+    """
+    with _redis_lock:
+        if run_id not in _redis_refcount:
+            return
+        
+        _redis_refcount[run_id] -= 1
+        
+        if _redis_refcount[run_id] <= 0:
+            logger.info(f"[{run_id}] All agents done, cleaning up Redis server...")
+            if run_id in _redis_servers:
+                try:
+                    _redis_servers[run_id].cleanup()
+                except Exception as e:
+                    logger.warning(f"[{run_id}] Failed to cleanup Redis: {e}")
+                del _redis_servers[run_id]
+            del _redis_refcount[run_id]
+
+
+def _needs_modal_redis(comm_url: str | None) -> bool:
+    """Check if we need to create a Modal Redis server.
+    
+    Returns True if:
+    - No comm_url provided
+    - comm_url points to localhost (not reachable from Modal)
+    """
+    if not comm_url:
+        return True
+    # localhost/127.0.0.1 can't be reached from Modal sandboxes
+    return "localhost" in comm_url or "127.0.0.1" in comm_url
+
+
+def _retrieve_sent_messages(redis_url: str, agent_id: str) -> list[dict]:
+    """Retrieve sent messages from Redis for conversation extraction.
+    
+    The SendMessageExecutor stores a copy of each sent message in a
+    {agent_id}:sent_messages key for later retrieval.
+    """
+    import json
+    try:
+        import redis
+        client = redis.from_url(redis_url)
+        log_key = f"{agent_id}:sent_messages"
+        messages = []
+        # Read all messages without consuming them
+        raw_messages = client.lrange(log_key, 0, -1)
+        for raw in raw_messages:
+            try:
+                msg = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+                messages.append(msg)
+            except json.JSONDecodeError:
+                continue
+        return messages
+    except Exception as e:
+        logger.warning(f"Failed to retrieve sent messages from Redis: {e}")
+        return []
 
 
 @register("openhands_sdk")
@@ -40,15 +138,21 @@ class OpenHandsSDKRunner:
         self.timeout = timeout
 
     def _get_oh_image(self, image: str) -> str:
-        """Convert base image to agent-server image (add -oh suffix if needed)."""
-        if image.endswith("-oh"):
+        """Convert base image to agent-server image (add -oh-v5 suffix if needed).
+        
+        Uses -oh-v5 tag with sent_messages tracking for conversation extraction.
+        """
+        if "-oh" in image:
+            # Already an OH image, ensure it's v5
+            if not image.endswith("-oh-v5"):
+                return image.replace("-oh-v4", "-oh-v5").replace("-oh-v3", "-oh-v5").replace("-oh-v2", "-oh-v5").replace("-oh", "-oh-v5")
             return image
-        # Split image:tag and append -oh to tag
+        # Split image:tag and append -oh-v5 to tag
         if ":" in image:
             base, tag = image.rsplit(":", 1)
-            return f"{base}:{tag}-oh"
+            return f"{base}:{tag}-oh-v5"
         # No tag specified
-        return f"{image}-oh"
+        return f"{image}-oh-v5"
 
     def run(
         self,
@@ -57,7 +161,7 @@ class OpenHandsSDKRunner:
         *,
         agent_id: str = "agent",
         model_name: str = "gpt-4o",
-        # Collaboration options (not yet supported)
+        # Collaboration options
         agents: list[str] | None = None,
         comm_url: str | None = None,
         git_server_url: str | None = None,
@@ -73,8 +177,8 @@ class OpenHandsSDKRunner:
                    -oh suffix is automatically appended.
             agent_id: Unique identifier for this agent
             model_name: LLM model to use
-            agents: List of all agent IDs (for collaboration, not yet supported)
-            comm_url: Redis URL for inter-agent messaging (not yet supported)
+            agents: List of all agent IDs (for collaboration)
+            comm_url: Redis URL for inter-agent messaging (created if not provided in coop mode)
             git_server_url: Git server URL for code sharing (not yet supported)
             git_enabled: Whether git collaboration is enabled
             messaging_enabled: Whether messaging is enabled
@@ -90,18 +194,66 @@ class OpenHandsSDKRunner:
         # Track state
         total_cost = 0.0
         messages = []
+        sent_messages = []
         steps = 0
         patch = ""
         status = "Error"
         error = None
+        
+        # Determine if this is a coop run
+        is_coop = messaging_enabled and agents and len(agents) > 1
+        redis_url = comm_url
+        run_id = None
+        owns_redis = False  # Track if we need to release Redis reference
+        
+        if is_coop:
+            from cooperbench.agents.openhands_agent_sdk.messaging import (
+                get_collaboration_system_prompt,
+            )
+            
+            # Extract run_id from config or comm_url namespace
+            config = config or {}
+            if comm_url and "#run:" in comm_url:
+                # Extract run_id from namespaced URL: redis://host:port#run:abc123
+                run_id = comm_url.split("#run:")[1]
+            else:
+                run_id = config.get("run_id")
+            
+            # Create Modal Redis if needed (localhost not reachable from Modal)
+            if _needs_modal_redis(comm_url):
+                if not run_id:
+                    # Generate run_id if not provided
+                    import uuid
+                    run_id = uuid.uuid4().hex[:8]
+                    logger.info(f"[{agent_id}] No run_id provided, generated: {run_id}")
+                
+                redis_url = _get_or_create_redis(run_id, agents, self.timeout)
+                owns_redis = True
+                logger.info(f"[{agent_id}] Using Modal Redis: {redis_url}")
+            
+            # Add collaboration instructions to task
+            collab_prompt = get_collaboration_system_prompt(
+                agent_id=agent_id,
+                agents=agents,
+                messaging_enabled=redis_url is not None,
+                git_enabled=git_enabled,
+            )
+            task = task + collab_prompt
 
         try:
             # Start agent-server in Modal
-            with ModalSandboxContext(oh_image, self.timeout) as sandbox_url:
+            # Pass coop info for messaging tools inside the sandbox
+            coop_info = {
+                "redis_url": redis_url,
+                "agent_id": agent_id,
+                "agents": agents or [],
+            } if is_coop and redis_url else None
+            
+            with ModalSandboxContext(oh_image, self.timeout, coop_info=coop_info) as sandbox_url:
                 logger.info(f"Agent-server running at: {sandbox_url}")
 
                 # Import SDK components
-                from openhands.sdk import LLM, Agent
+                from openhands.sdk import LLM
                 from openhands.sdk.conversation import RemoteConversation
                 from openhands.sdk.workspace import RemoteWorkspace
                 from openhands.tools.preset.default import get_default_agent
@@ -112,8 +264,10 @@ class OpenHandsSDKRunner:
 
                 # Create agent with default tools (terminal, file_editor, task_tracker)
                 # Browser tools disabled since we're running headless
+                # Collaboration tools (SendMessage/ReceiveMessage) are always registered
+                # but only active when REDIS_URL env var is set in the sandbox
                 agent = get_default_agent(llm=llm, cli_mode=True)
-
+                
                 # Connect to remote workspace (agent-server in Modal)
                 workspace = RemoteWorkspace(
                     host=sandbox_url,
@@ -122,13 +276,29 @@ class OpenHandsSDKRunner:
 
                 # Callback to collect events
                 def event_callback(event):
-                    nonlocal steps
+                    nonlocal steps, sent_messages
                     steps += 1
-                    messages.append({
+                    
+                    event_data = {
                         "step": steps,
                         "event_type": type(event).__name__,
                         "event": str(event)[:500],  # Truncate long events
-                    })
+                    }
+                    
+                    # Extract message details for SendMessageAction
+                    # The event string contains the action details
+                    event_str = str(event)
+                    if "SendMessageAction" in event_str:
+                        # Try to extract recipient and content from the event string
+                        import re
+                        recipient_match = re.search(r'recipient["\s:=]+["\']?(\w+)', event_str)
+                        content_match = re.search(r'content["\s:=]+["\'](.+?)["\'](?:\s|,|$)', event_str, re.DOTALL)
+                        if recipient_match:
+                            event_data["message_recipient"] = recipient_match.group(1)
+                        if content_match:
+                            event_data["message_content"] = content_match.group(1)[:200]  # Truncate content
+                    
+                    messages.append(event_data)
 
                 # Create remote conversation - agent loop runs on server
                 conversation = RemoteConversation(
@@ -141,8 +311,59 @@ class OpenHandsSDKRunner:
                 # Send task and run the conversation
                 logger.info(f"Sending task to agent: {task[:100]}...")
                 conversation.send_message(task)
-                conversation.run(blocking=True, timeout=float(self.timeout))
-
+                
+                # In coop mode, use non-blocking run with message polling
+                # This mirrors mini_swe_agent's pattern of checking inbox before each LLM call
+                if is_coop and redis_url:
+                    import redis as redis_client
+                    redis_conn = redis_client.from_url(redis_url)
+                    inbox_key = f"{agent_id}:inbox"
+                    
+                    conversation.run(blocking=False)
+                    
+                    start_time = time.time()
+                    poll_interval = 2.0  # Check for messages every 2 seconds
+                    
+                    while True:
+                        # Check if conversation is finished
+                        try:
+                            state = conversation.state
+                            exec_status = getattr(state, 'execution_status', None)
+                            # exec_status is an enum like ConversationExecutionStatus.FINISHED
+                            exec_str = str(exec_status).lower() if exec_status else ""
+                            if 'finished' in exec_str or 'error' in exec_str:
+                                logger.info(f"Conversation finished with status: {exec_status}")
+                                break
+                        except Exception as e:
+                            logger.debug(f"Error checking state: {e}")
+                        
+                        # Check for timeout
+                        elapsed = time.time() - start_time
+                        if elapsed > self.timeout:
+                            logger.warning(f"Timeout after {elapsed:.0f}s")
+                            break
+                        
+                        # Poll Redis for incoming messages (like mini_swe_agent does each step)
+                        try:
+                            while True:
+                                raw = redis_conn.lpop(inbox_key)
+                                if raw is None:
+                                    break
+                                msg = json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+                                sender = msg.get("from", "unknown")
+                                content = msg.get("content", "")
+                                # Inject message into conversation (mirrors mini_swe_agent pattern)
+                                injected_msg = f"[Message from {sender}]: {content}"
+                                logger.info(f"[{agent_id}] Received message from {sender}, injecting into conversation")
+                                conversation.send_message(injected_msg)
+                        except Exception as e:
+                            logger.debug(f"Error polling Redis: {e}")
+                        
+                        time.sleep(poll_interval)
+                else:
+                    # Solo mode: simple blocking run
+                    conversation.run(blocking=True, timeout=float(self.timeout))
+                    
                 # Get the patch from remote workspace
                 # Note: workspace.git_diff() has a bug (Path vs str URL), so use execute_command
                 logger.info("Retrieving git diff...")
@@ -171,11 +392,20 @@ class OpenHandsSDKRunner:
                 
                 status = "Submitted"
                 logger.info(f"Agent completed. Steps: {steps}, Patch length: {len(patch)}")
+                
+                # Retrieve sent messages from Redis for conversation extraction
+                if is_coop and redis_url:
+                    sent_messages = _retrieve_sent_messages(redis_url, agent_id)
+                    logger.info(f"Retrieved {len(sent_messages)} sent messages")
 
         except Exception as e:
             logger.exception(f"Error running agent: {e}")
             error = str(e)
             status = "Error"
+        finally:
+            # Release Redis reference (cleanup happens when all agents done)
+            if owns_redis and run_id:
+                _release_redis(run_id)
 
         return AgentResult(
             status=status,
@@ -183,6 +413,7 @@ class OpenHandsSDKRunner:
             cost=total_cost,
             steps=steps,
             messages=messages,
+            sent_messages=sent_messages,
             error=error,
         )
 
@@ -196,16 +427,25 @@ class ModalSandboxContext:
     Credentials are passed to the sandbox via modal.Secret:
     - GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY from environment
     - Google Cloud credentials from GOOGLE_APPLICATION_CREDENTIALS file
+    - For coop mode: REDIS_URL, AGENT_ID, AGENTS (for SendMessageTool)
     """
 
-    def __init__(self, image_name: str, timeout: int):
+    def __init__(self, image_name: str, timeout: int, coop_info: dict | None = None):
+        """Initialize the context manager.
+        
+        Args:
+            image_name: Docker image name for the agent-server
+            timeout: Sandbox timeout in seconds
+            coop_info: Optional dict with redis_url, agent_id, agents for coop mode
+        """
         self.image_name = image_name
         self.timeout = timeout
+        self.coop_info = coop_info
         self._sandbox: modal.Sandbox | None = None
         self._server_proc = None
 
     def _collect_credentials(self) -> dict[str, str]:
-        """Collect API keys and credentials from environment."""
+        """Collect API keys, credentials, and coop info from environment."""
         creds = {}
         
         # Collect API keys
@@ -249,6 +489,16 @@ class ModalSandboxContext:
                     except json.JSONDecodeError:
                         pass
         
+        # Add coop info for SendMessageTool
+        if self.coop_info:
+            if self.coop_info.get("redis_url"):
+                creds["REDIS_URL"] = self.coop_info["redis_url"]
+            if self.coop_info.get("agent_id"):
+                creds["AGENT_ID"] = self.coop_info["agent_id"]
+            if self.coop_info.get("agents"):
+                creds["AGENTS"] = ",".join(self.coop_info["agents"])
+            logger.info(f"Passing coop info to sandbox: agent={creds.get('AGENT_ID')}, agents={creds.get('AGENTS')}")
+        
         return creds
 
     def __enter__(self) -> str:
@@ -258,8 +508,8 @@ class ModalSandboxContext:
         # Build image and clear entrypoint (Modal will add its own default command)
         image = modal.Image.from_registry(self.image_name).entrypoint([])
         
-        # Get or create app
-        app = modal.App.lookup("cooperbench-openhands", create_if_missing=True)
+        # Get or create app (use unique name to avoid image caching issues)
+        app = modal.App.lookup("cooperbench-openhands-v8", create_if_missing=True)
         
         # Collect credentials and create Modal secret
         creds = self._collect_credentials()
@@ -278,8 +528,56 @@ class ModalSandboxContext:
         
         logger.info(f"Sandbox created: {self._sandbox.object_id}")
         
-        # If Google Cloud credentials JSON was passed, write it to a file
-        # and set the GOOGLE_APPLICATION_CREDENTIALS env var
+        # IMPORTANT: We use a Python wrapper to ensure collaboration tools are
+        # imported in the SAME process as the agent-server. This is needed because
+        # Modal may cache Docker images and the __init__.py auto-import might not
+        # be in the cached image.
+        #
+        # We write the wrapper to a file first, then execute it (heredocs don't
+        # work well with sandbox.exec's bash -c).
+        
+        wrapper_script = '''
+import sys
+import os
+import traceback
+
+sys.argv = ['agent_server', '--host', '0.0.0.0', '--port', '8000']
+
+# Debug: Write to file to verify wrapper is running
+log = open('/tmp/wrapper_debug.log', 'w')
+log.write('Wrapper started\\n')
+log.write('REDIS_URL=' + os.environ.get('REDIS_URL', 'NOT_SET') + '\\n')
+log.write('AGENT_ID=' + os.environ.get('AGENT_ID', 'NOT_SET') + '\\n')
+log.flush()
+
+# Force import collaboration tools to register them BEFORE server starts
+try:
+    from openhands.tools.collaboration import SendMessageTool, ReceiveMessageTool
+    log.write('Tools imported: ' + SendMessageTool.name + ', ' + ReceiveMessageTool.name + '\\n')
+    log.flush()
+    print('[STARTUP] Collaboration tools registered:', SendMessageTool.name, ReceiveMessageTool.name, flush=True)
+except Exception as e:
+    log.write('Import failed: ' + str(e) + '\\n')
+    log.write(traceback.format_exc() + '\\n')
+    log.flush()
+    print('[STARTUP] WARNING: Failed to import collaboration tools:', e, flush=True)
+
+# Now run the agent server (tools are registered in this process)
+try:
+    from openhands.agent_server.__main__ import main
+    log.write('Starting agent server main()\\n')
+    log.flush()
+    log.close()
+    main()
+except Exception as e:
+    log.write('Server failed: ' + str(e) + '\\n')
+    log.write(traceback.format_exc() + '\\n')
+    log.flush()
+    log.close()
+    raise
+'''
+
+        # Bash script to set up credentials and run the Python wrapper
         startup_script = """
 #!/bin/bash
 set -e
@@ -290,9 +588,16 @@ if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
     export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json
 fi
 
-# Start the agent-server
-exec /opt/agent-server-venv/bin/python -m openhands.agent_server --host 0.0.0.0 --port 8000
+# Run the Python wrapper
+exec /opt/agent-server-venv/bin/python /tmp/agent_wrapper.py
 """
+        
+        # Write the Python wrapper script to the sandbox using base64 (safe encoding)
+        logger.info("Writing Python wrapper script to sandbox...")
+        import base64
+        wrapper_b64 = base64.b64encode(wrapper_script.encode()).decode()
+        write_wrapper = self._sandbox.exec("bash", "-c", f"echo '{wrapper_b64}' | base64 -d > /tmp/agent_wrapper.py")
+        write_wrapper.wait()
         
         # Start the agent-server manually (since we cleared the entrypoint)
         logger.info("Starting agent-server in sandbox...")
@@ -300,7 +605,7 @@ exec /opt/agent-server-venv/bin/python -m openhands.agent_server --host 0.0.0.0 
             "bash", "-c", startup_script,
         )
         
-        # Give the server a moment to start
+        # Give the server a moment to start and capture initial output
         time.sleep(3)
         
         # Get tunnel URL

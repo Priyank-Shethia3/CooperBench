@@ -240,7 +240,8 @@ def _spawn_agent(
         console.print(f"  [dim]{agent_id}[/dim] starting...")
 
     # Load agent config file if provided
-    config = {"backend": backend}
+    # run_id is passed for agents that need to coordinate shared infrastructure
+    config = {"backend": backend, "run_id": redis_url.split("#run:")[1] if redis_url and "#run:" in redis_url else None}
     if git_network:
         config["git_network"] = git_network
     if agent_config:
@@ -276,6 +277,7 @@ def _spawn_agent(
         "cost": result.cost,
         "steps": result.steps,
         "messages": result.messages,
+        "sent_messages": result.sent_messages,  # For tool-based agents
         "error": result.error,
     }
 
@@ -287,11 +289,28 @@ def _extract_conversation(results: dict, agents: list[str]) -> list[dict]:
     for agent_id in agents:
         r = results[agent_id]
         fid = r["feature_id"]
+
+        # Method 1: Check for sent_messages field (OpenHands SDK adapter)
+        # This is the preferred method for tool-based agents
+        for sent_msg in r.get("sent_messages", []):
+            conversation.append(
+                {
+                    "from": agent_id,
+                    "to": sent_msg.get("to", sent_msg.get("recipient")),
+                    "message": sent_msg.get("message", sent_msg.get("content", "")),
+                    "timestamp": sent_msg.get("timestamp"),
+                    "feature_id": fid,
+                }
+            )
+
+        # Method 2: Parse from messages list (mini_swe_agent bash commands + OpenHands events)
         for msg in r.get("messages", []):
             content = msg.get("content", "")
+            # Also check event field for OpenHands events
+            event = msg.get("event", "")
             ts = msg.get("timestamp")
 
-            # Outgoing: agent sent a message via send_message command
+            # Outgoing: agent sent a message via send_message command (bash format)
             if msg.get("role") == "assistant" and "send_message" in content:
                 # Extract: send_message agentX "message"
                 match = re.search(r'send_message\s+(\w+)\s+"([^"]+)"', content)
@@ -306,6 +325,18 @@ def _extract_conversation(results: dict, agents: list[str]) -> list[dict]:
                             "feature_id": fid,
                         }
                     )
+
+            # Outgoing: OpenHands tool-based format (message_recipient/message_content fields)
+            if msg.get("message_recipient") and msg.get("message_content"):
+                conversation.append(
+                    {
+                        "from": agent_id,
+                        "to": msg["message_recipient"],
+                        "message": msg["message_content"],
+                        "timestamp": ts,
+                        "feature_id": fid,
+                    }
+                )
 
             # Incoming: received message from another agent
             if msg.get("role") == "user" and "[Message from" in content:

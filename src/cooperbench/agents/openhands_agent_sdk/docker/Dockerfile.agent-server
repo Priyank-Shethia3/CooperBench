@@ -37,10 +37,12 @@ ENV AGENT_VENV=/opt/agent-server-venv
 RUN uv venv --python 3.12 ${AGENT_VENV}
 
 # Install agent-server and dependencies in the venv
+# redis is needed for SendMessageTool/ReceiveMessageTool (coop mode)
 RUN uv pip install --python ${AGENT_VENV}/bin/python \
         openhands-agent-server \
         openhands-sdk \
-        openhands-tools
+        openhands-tools \
+        redis
 
 # Copy local OpenHands SDK packages (for custom tools)
 COPY openhands-sdk /opt/openhands/openhands-sdk

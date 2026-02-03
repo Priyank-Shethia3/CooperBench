@@ -64,10 +64,12 @@ if ! docker buildx inspect cooperbench-builder &>/dev/null; then
 fi
 docker buildx use cooperbench-builder
 
-# Build and push multi-platform image
-echo "Building multi-platform image..."
+# Build and push image (--no-cache ensures we get latest local packages)
+# Note: Modal only supports linux/amd64, so we build for that platform only
+echo "Building amd64 image..."
 docker buildx build \
-    --platform linux/amd64,linux/arm64 \
+    --no-cache \
+    --platform linux/amd64 \
     --build-arg BASE_IMAGE="${BASE_IMAGE}" \
     -t "${TARGET_IMAGE}" \
     -f "${BUILD_CONTEXT}/Dockerfile" \

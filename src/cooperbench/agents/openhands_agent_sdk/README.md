@@ -49,10 +49,12 @@ We built a **minimal adapter** that leverages the OpenHands SDK's native archite
 | File | Purpose |
 |------|---------|
 | `adapter.py` | CooperBench adapter using `RemoteConversation` + `RemoteWorkspace` |
+| `messaging.py` | Generates collaboration prompts for coop mode |
+| `connectors/` | Infrastructure components (`ModalRedisServer`) |
 | `docker/Dockerfile.agent-server` | Layers agent-server onto CooperBench task images |
 | `docker/build_agent_image.sh` | Builds multi-platform images (`linux/amd64`, `linux/arm64`) |
 | `openhands-sdk/` | Local copy of SDK (for customizations) |
-| `openhands-tools/` | Local copy of tools (for customizations) |
+| `openhands-tools/` | Local copy of tools (incl. `SendMessageTool`, `ReceiveMessageTool`) |
 | `openhands-workspace/` | Local copy of workspace implementations |
 
 ### How It Works
@@ -115,8 +117,12 @@ The adapter uses OpenHands SDK's default toolset via `get_default_agent(cli_mode
 - **GlobTool** - Find files by pattern
 - **GrepTool** - Search file contents
 - **TaskTrackerTool** - Track implementation progress
+- **SendMessageTool** - Send messages to teammates (coop mode only)
+- **ReceiveMessageTool** - Check for messages from teammates (coop mode only)
 
 Browser tools are disabled since tasks run headless.
+
+Messaging tools are only registered when `REDIS_URL` and multiple `AGENTS` are configured (coop mode).
 
 ## Customization
 
@@ -163,7 +169,98 @@ solo-oh-gemini-2-5-flash-llama-index-17244
 
 ## Collaboration Support
 
-**Not yet implemented.** The adapter signature includes collaboration parameters (`agents`, `comm_url`, `git_server_url`, etc.) for future multi-agent support, but these are currently ignored.
+The adapter supports multi-agent collaboration via Redis messaging. **Fully decoupled**: the adapter manages its own infrastructure internally—the CooperBench orchestrator just passes flags.
+
+### Architecture
+
+Everything runs in Modal - no local Redis needed:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                             Modal                                   │
+│                                                                     │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │            ModalRedisServer (shared sandbox)               │     │
+│  │  - Single Redis instance for all agents in the coop run    │     │
+│  │  - First agent to run() creates it, others reuse           │     │
+│  │  - Cleanup when last agent finishes                        │     │
+│  └───────────▲─────────────────────────────▲──────────────────┘     │
+│              │                             │                        │
+│  ┌───────────┴───────────┐   ┌─────────────┴─────────────┐          │
+│  │  Agent-Server Sandbox │   │  Agent-Server Sandbox     │          │
+│  │  (agent_0)            │   │  (agent_1)                │          │
+│  │                       │   │                           │          │
+│  │  - SendMessageTool    │   │  - SendMessageTool        │          │
+│  │    pushes to Redis    │   │    pushes to Redis        │          │
+│  │                       │   │                           │          │
+│  │  - ReceiveMessageTool │   │  - ReceiveMessageTool     │          │
+│  │    pops from Redis    │   │    pops from Redis        │          │
+│  └───────────────────────┘   └───────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────────┘
+
+Coordination via module-level registry with thread-safe locking.
+```
+
+### Decoupled Design
+
+The adapter handles its own infrastructure:
+
+```python
+# CooperBench orchestrator just passes flags:
+agent.run(
+    task=task,
+    image=image,
+    agents=["agent_0", "agent_1"],
+    messaging_enabled=True,
+    # comm_url can be None or localhost - adapter creates Modal Redis
+)
+
+# Internally, adapter:
+# 1. Detects coop mode (multiple agents + messaging_enabled)
+# 2. Creates ModalRedisServer (first agent, thread-safe)
+# 3. Passes Redis URL to sandbox for SendMessage/ReceiveMessage tools
+# 4. Releases reference when done (last agent cleans up)
+```
+
+This means:
+- **No external Redis needed** - adapter creates its own
+- **No orchestrator changes** - just pass standard flags
+- **Portable** - can switch to different backends later
+
+### Running Coop Mode
+
+```bash
+# Run with 2 agents on collaborative tasks
+cooperbench run \
+  --setting coop \
+  -a openhands_sdk \
+  -m vertex_ai/gemini-2.5-flash \
+  -r llama_index_task \
+  -t 17244 \
+  --agents 2
+```
+
+### How Messaging Works
+
+1. **Sending Messages**: Agent uses `SendMessageTool` to push messages to teammate's Redis inbox.
+
+2. **Receiving Messages**: Agent uses `ReceiveMessageTool` to pop messages from their own inbox. Messages are formatted as: `[Message from agent_0]: ...`
+
+3. **Collaboration Prompt**: Task prompt is augmented with instructions explaining the messaging tools.
+
+### Environment Variables in Sandbox
+
+The adapter passes these to each sandbox for messaging tools:
+
+| Variable | Description |
+|----------|-------------|
+| `REDIS_URL` | Redis URL (tunnel to ModalRedisServer) |
+| `AGENT_ID` | This agent's ID |
+| `AGENTS` | Comma-separated list of all agent IDs |
+
+### Limitations
+
+- **Git collaboration** (`git_enabled=True`) is not yet supported. Agents cannot push/pull to shared remotes.
 
 ## Upstream SDK
 

@@ -1,5 +1,6 @@
 """Default preset configuration for OpenHands agents."""
 
+import os
 from openhands.sdk import Agent
 from openhands.sdk.context.condenser import (
     LLMSummarizingCondenser,
@@ -28,6 +29,13 @@ def register_default_tools(enable_browser: bool = True) -> None:
         from openhands.tools.browser_use import BrowserToolSet
 
         logger.debug(f"Tool: {BrowserToolSet.name} registered.")
+    
+    # Register collaboration tools (only active when REDIS_URL is set)
+    from openhands.tools.collaboration import ReceiveMessageTool, SendMessageTool
+    # DEBUG [Hypothesis A/D - tool names at registration]
+    print(f"[DEBUG-DEFAULT] Registering collab tools. SendMessageTool.name={SendMessageTool.name} ReceiveMessageTool.name={ReceiveMessageTool.name}", flush=True)
+    logger.debug(f"Tool: {SendMessageTool.name} registered.")
+    logger.debug(f"Tool: {ReceiveMessageTool.name} registered.")
 
 
 def get_default_tools(
@@ -44,16 +52,24 @@ def get_default_tools(
     from openhands.tools.file_editor import FileEditorTool
     from openhands.tools.task_tracker import TaskTrackerTool
     from openhands.tools.terminal import TerminalTool
+    from openhands.tools.collaboration import ReceiveMessageTool, SendMessageTool
 
     tools = [
         Tool(name=TerminalTool.name),
         Tool(name=FileEditorTool.name),
         Tool(name=TaskTrackerTool.name),
+        Tool(name=SendMessageTool.name),  # Only active when REDIS_URL is set
+        Tool(name=ReceiveMessageTool.name),  # Only active when REDIS_URL is set
     ]
     if enable_browser:
         from openhands.tools.browser_use import BrowserToolSet
 
         tools.append(Tool(name=BrowserToolSet.name))
+    
+    # DEBUG [Hypothesis D - tool names returned]
+    tool_names = [t.name for t in tools]
+    print(f"[DEBUG-DEFAULT] get_default_tools() returning: {tool_names}", flush=True)
+    
     return tools
 
 
