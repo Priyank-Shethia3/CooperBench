@@ -198,7 +198,7 @@ agent:
     </output_tail>
     {%- endif %}
     Please try another command and make sure to avoid those requiring interactive input.
-  step_limit: 50
+  step_limit: 100
   cost_limit: 1.
   mode: confirm
 environment:
