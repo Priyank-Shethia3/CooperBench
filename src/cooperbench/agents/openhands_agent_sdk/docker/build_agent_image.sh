@@ -37,7 +37,7 @@ echo "Building OpenHands agent-server image"
 echo "================================================"
 echo "Base image:   ${BASE_IMAGE}"
 echo "Target image: ${TARGET_IMAGE}"
-echo "Platforms:    linux/amd64, linux/arm64"
+echo "Platform:     linux/amd64"
 echo "SDK dir:      ${AGENT_SDK_DIR}"
 echo "================================================"
 
@@ -76,8 +76,13 @@ docker buildx build \
     --push \
     "${BUILD_CONTEXT}"
 
-# Cleanup
+# Cleanup build context
 rm -rf "${BUILD_CONTEXT}"
+
+# Clean up Docker to save disk space
+echo "Cleaning up Docker to save disk space..."
+docker buildx prune -f --filter "until=1h" 2>/dev/null || true
+docker image prune -f 2>/dev/null || true
 
 echo "================================================"
 echo "Successfully built and pushed: ${TARGET_IMAGE}"

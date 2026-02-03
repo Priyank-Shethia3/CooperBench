@@ -42,7 +42,7 @@ def _get_or_create_redis(run_id: str, agents: list[str], timeout: int = 3600) ->
     with _redis_lock:
         if run_id not in _redis_servers:
             logger.info(f"[{run_id}] Creating shared ModalRedisServer...")
-            app = modal.App.lookup("cooperbench-openhands-v8", create_if_missing=True)
+            app = modal.App.lookup("cooperbench-openhands", create_if_missing=True)
             server = ModalRedisServer.create(
                 app=app,
                 run_id=run_id,
@@ -138,21 +138,17 @@ class OpenHandsSDKRunner:
         self.timeout = timeout
 
     def _get_oh_image(self, image: str) -> str:
-        """Convert base image to agent-server image (add -oh-v5 suffix if needed).
-        
-        Uses -oh-v5 tag with sent_messages tracking for conversation extraction.
-        """
+        """Convert base image to agent-server image (add -oh suffix if needed)."""
         if "-oh" in image:
-            # Already an OH image, ensure it's v5
-            if not image.endswith("-oh-v5"):
-                return image.replace("-oh-v4", "-oh-v5").replace("-oh-v3", "-oh-v5").replace("-oh-v2", "-oh-v5").replace("-oh", "-oh-v5")
-            return image
-        # Split image:tag and append -oh-v5 to tag
+            # Already an OH image - normalize to just -oh (remove version suffixes)
+            import re
+            return re.sub(r'-oh(-v\d+)?$', '-oh', image)
+        # Split image:tag and append -oh to tag
         if ":" in image:
             base, tag = image.rsplit(":", 1)
-            return f"{base}:{tag}-oh-v5"
+            return f"{base}:{tag}-oh"
         # No tag specified
-        return f"{image}-oh-v5"
+        return f"{image}-oh"
 
     def run(
         self,
@@ -508,8 +504,8 @@ class ModalSandboxContext:
         # Build image and clear entrypoint (Modal will add its own default command)
         image = modal.Image.from_registry(self.image_name).entrypoint([])
         
-        # Get or create app (use unique name to avoid image caching issues)
-        app = modal.App.lookup("cooperbench-openhands-v8", create_if_missing=True)
+        # Get or create app
+        app = modal.App.lookup("cooperbench-openhands", create_if_missing=True)
         
         # Collect credentials and create Modal secret
         creds = self._collect_credentials()
