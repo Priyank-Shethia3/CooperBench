@@ -5,6 +5,10 @@ Both sending and receiving happen inside the Modal sandbox via Redis.
 Tools:
 - SendMessageTool: Push message to teammate's inbox
 - ReceiveMessageTool: Pop messages from own inbox
+
+Supports URL fragment namespacing for shared Redis:
+    redis://host:port#run:abc123
+Keys become: run:abc123:agent1:inbox instead of agent1:inbox
 """
 
 import json
@@ -64,9 +68,18 @@ class SendMessageExecutor(ToolExecutor[SendMessageAction, SendMessageObservation
     
     def __init__(self, redis_url: str, agent_id: str, agents: list[str]):
         import redis
-        self.redis_url = redis_url
         self.agent_id = agent_id
         self.agents = agents
+        
+        # Parse optional namespace prefix from URL (format: url#prefix)
+        # This allows multiple concurrent runs to share one Redis server
+        if "#" in redis_url:
+            redis_url, prefix = redis_url.split("#", 1)
+            self._prefix = prefix + ":"
+        else:
+            self._prefix = ""
+        
+        self.redis_url = redis_url
         self._client = redis.from_url(redis_url)
     
     def __call__(self, action: SendMessageAction, conversation=None) -> SendMessageObservation:
@@ -91,11 +104,11 @@ class SendMessageExecutor(ToolExecutor[SendMessageAction, SendMessageObservation
                 "content": action.content,
                 "timestamp": datetime.now().isoformat(),
             }
-            inbox_key = f"{action.recipient}:inbox"
+            inbox_key = f"{self._prefix}{action.recipient}:inbox"
             self._client.rpush(inbox_key, json.dumps(message))
             
             # Also store in a log key for conversation extraction (not consumed)
-            log_key = f"{self.agent_id}:sent_messages"
+            log_key = f"{self._prefix}{self.agent_id}:sent_messages"
             self._client.rpush(log_key, json.dumps(message))
             
             return SendMessageObservation(
@@ -135,7 +148,11 @@ class SendMessageTool(ToolDefinition[SendMessageAction, SendMessageObservation])
         agents_str = os.environ.get("AGENTS", "")
         agents = agents or (agents_str.split(",") if agents_str else [])
         
+        # Debug: log what we got from env
+        print(f"[SendMessageTool.create] redis_url={redis_url}, agent_id={agent_id}, agents={agents}", flush=True)
+        
         if not redis_url or not agents or len(agents) <= 1:
+            print(f"[SendMessageTool.create] SKIPPING - conditions not met", flush=True)
             return []
         
         executor = SendMessageExecutor(
@@ -202,13 +219,22 @@ class ReceiveMessageExecutor(ToolExecutor[ReceiveMessageAction, ReceiveMessageOb
     
     def __init__(self, redis_url: str, agent_id: str):
         import redis
-        self.redis_url = redis_url
         self.agent_id = agent_id
+        
+        # Parse optional namespace prefix from URL (format: url#prefix)
+        if "#" in redis_url:
+            redis_url, prefix = redis_url.split("#", 1)
+            self._prefix = prefix + ":"
+        else:
+            self._prefix = ""
+        
+        self.redis_url = redis_url
         self._client = redis.from_url(redis_url)
+        print(f"[ReceiveMessageExecutor] Initialized with prefix='{self._prefix}' for agent={agent_id}", flush=True)
     
     def __call__(self, action: ReceiveMessageAction, conversation=None) -> ReceiveMessageObservation:
         try:
-            inbox_key = f"{self.agent_id}:inbox"
+            inbox_key = f"{self._prefix}{self.agent_id}:inbox"
             messages = []
             
             # Pop all messages from inbox
@@ -259,7 +285,11 @@ class ReceiveMessageTool(ToolDefinition[ReceiveMessageAction, ReceiveMessageObse
         agents_str = os.environ.get("AGENTS", "")
         agents = agents or (agents_str.split(",") if agents_str else [])
         
+        # Debug: log what we got from env
+        print(f"[ReceiveMessageTool.create] redis_url={redis_url}, agent_id={agent_id}, agents={agents}", flush=True)
+        
         if not redis_url or not agents or len(agents) <= 1:
+            print(f"[ReceiveMessageTool.create] SKIPPING - conditions not met", flush=True)
             return []
         
         executor = ReceiveMessageExecutor(

@@ -6,12 +6,9 @@ for messaging and coordination.
 
 from __future__ import annotations
 
-import logging
 import time
 
 import modal
-
-logger = logging.getLogger(__name__)
 
 
 class ModalRedisServer:
@@ -40,9 +37,6 @@ class ModalRedisServer:
         self._sandbox = sandbox
         self._redis_url = redis_url
         self._agents = agents
-        self._logger = logging.getLogger(
-            "cooperbench.agents.openhands_agent_sdk.connectors.redis_server"
-        )
     
     @classmethod
     def create(
@@ -63,7 +57,6 @@ class ModalRedisServer:
         Returns:
             ModalRedisServer instance ready to accept connections
         """
-        logger.info(f"Creating Redis server for run {run_id} with agents {agents}")
         
         # Image with Redis
         image = modal.Image.debian_slim().run_commands(
@@ -78,7 +71,6 @@ class ModalRedisServer:
             unencrypted_ports=[6379],  # Redis TCP port
         )
         
-        logger.info(f"Sandbox created: {sandbox.object_id}")
         
         # Start Redis server
         # --bind 0.0.0.0 to accept connections from tunnel
@@ -113,7 +105,6 @@ class ModalRedisServer:
             tunnel = tunnels[6379]
             # Use unencrypted endpoint for Redis protocol
             redis_url = f"redis://{tunnel.unencrypted_host}:{tunnel.unencrypted_port}"
-            logger.info(f"Redis server ready at {redis_url}")
         else:
             raise RuntimeError(f"Failed to get tunnel for port 6379. Available: {tunnels}")
         
@@ -127,7 +118,6 @@ class ModalRedisServer:
         """Wait for Redis to be accessible."""
         import redis
         
-        logger.info(f"Verifying Redis at {redis_url}...")
         start = time.time()
         last_error = None
         
@@ -135,7 +125,6 @@ class ModalRedisServer:
             try:
                 client = redis.from_url(redis_url, socket_timeout=5)
                 if client.ping():
-                    logger.info("Redis is ready!")
                     client.close()
                     return
             except Exception as e:
@@ -160,10 +149,9 @@ class ModalRedisServer:
         """Terminate the Redis server sandbox."""
         if self._sandbox:
             try:
-                logger.info("Terminating Redis server...")
                 self._sandbox.terminate()
-            except Exception as e:
-                logger.warning(f"Failed to terminate sandbox: {e}")
+            except Exception:
+                pass  # Ignore cleanup errors
 
 
 def create_redis_server(

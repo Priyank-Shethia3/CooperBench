@@ -66,6 +66,7 @@ swe-agent = [
     "unidiff>=0.7",
 ]
 gcp = [
+    "cooperbench",
     "google-cloud-batch>=0.17",
     "google-cloud-compute>=1.0",
     "google-cloud-storage>=2.0",
@@ -184,3 +185,6 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+[tool.uv.sources]
+cooperbench = { workspace = true }

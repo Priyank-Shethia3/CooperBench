@@ -30,56 +30,58 @@ logging.getLogger("openhands.workspace").setLevel(logging.CRITICAL)
 # Modal app for running agent-server and infrastructure
 modal_app = modal.App("cooperbench-openhands")
 
-# Module-level registry for shared Redis servers (keyed by run_id)
-# This allows multiple parallel agents in the same coop run to share one Redis
-_redis_servers: dict[str, Any] = {}  # run_id -> ModalRedisServer
+# Module-level shared Redis server for all coop runs
+# All concurrent tasks share ONE Redis server, with namespacing via URL fragment
+_shared_redis: Any = None  # ModalRedisServer instance
 _redis_lock = threading.Lock()
-_redis_refcount: dict[str, int] = {}  # run_id -> number of agents using it
+_redis_refcount: int = 0  # Total number of active agents using Redis
 
 
 def _get_or_create_redis(run_id: str, agents: list[str], timeout: int = 3600) -> str:
-    """Get or create a shared ModalRedisServer for a coop run.
+    """Get or create a shared ModalRedisServer for coop runs.
     
-    Thread-safe: First agent to call this creates the server, others reuse it.
-    Returns the Redis URL that all agents can connect to.
+    Thread-safe: First caller creates the server, all others reuse it.
+    Returns a namespaced Redis URL: redis://host:port#run:{run_id}
+    
+    The namespace prefix ensures concurrent runs don't interfere with each other.
     """
+    global _shared_redis, _redis_refcount
     from cooperbench.agents.openhands_agent_sdk.connectors import ModalRedisServer
     
     with _redis_lock:
-        if run_id not in _redis_servers:
+        if _shared_redis is None:
             app = modal.App.lookup("cooperbench-openhands", create_if_missing=True)
-            server = ModalRedisServer.create(
+            _shared_redis = ModalRedisServer.create(
                 app=app,
-                run_id=run_id,
+                run_id="shared",  # Single shared server
                 agents=agents,
                 timeout=timeout,
             )
-            _redis_servers[run_id] = server
-            _redis_refcount[run_id] = 0
         
-        _redis_refcount[run_id] += 1
-        return _redis_servers[run_id].url
+        _redis_refcount += 1
+        # Return namespaced URL so each run has isolated keys
+        return f"{_shared_redis.url}#run:{run_id}"
 
 
-def _release_redis(run_id: str) -> None:
+def _release_redis() -> None:
     """Release a reference to the shared Redis server.
     
     When refcount reaches 0, the server is cleaned up.
     """
+    global _shared_redis, _redis_refcount
+    
     with _redis_lock:
-        if run_id not in _redis_refcount:
+        if _redis_refcount <= 0:
             return
         
-        _redis_refcount[run_id] -= 1
+        _redis_refcount -= 1
         
-        if _redis_refcount[run_id] <= 0:
-            if run_id in _redis_servers:
-                try:
-                    _redis_servers[run_id].cleanup()
-                except Exception as e:
-                    logger.warning(f"[{run_id}] Failed to cleanup Redis: {e}")
-                del _redis_servers[run_id]
-            del _redis_refcount[run_id]
+        if _redis_refcount <= 0 and _shared_redis is not None:
+            try:
+                _shared_redis.cleanup()
+            except Exception:
+                pass  # Ignore cleanup errors
+            _shared_redis = None
 
 
 def _needs_modal_redis(comm_url: str | None) -> bool:
@@ -95,17 +97,33 @@ def _needs_modal_redis(comm_url: str | None) -> bool:
     return "localhost" in comm_url or "127.0.0.1" in comm_url
 
 
+def _parse_redis_url(redis_url: str) -> tuple[str, str]:
+    """Parse Redis URL and extract namespace prefix.
+    
+    Args:
+        redis_url: URL like "redis://host:port" or "redis://host:port#run:abc123"
+        
+    Returns:
+        Tuple of (clean_url, prefix) where prefix includes trailing colon if present
+    """
+    if "#" in redis_url:
+        url, prefix = redis_url.split("#", 1)
+        return url, prefix + ":"
+    return redis_url, ""
+
+
 def _retrieve_sent_messages(redis_url: str, agent_id: str) -> list[dict]:
     """Retrieve sent messages from Redis for conversation extraction.
     
     The SendMessageExecutor stores a copy of each sent message in a
-    {agent_id}:sent_messages key for later retrieval.
+    {prefix}{agent_id}:sent_messages key for later retrieval.
     """
     import json
     try:
         import redis
-        client = redis.from_url(redis_url)
-        log_key = f"{agent_id}:sent_messages"
+        url, prefix = _parse_redis_url(redis_url)
+        client = redis.from_url(url)
+        log_key = f"{prefix}{agent_id}:sent_messages"
         messages = []
         # Read all messages without consuming them
         raw_messages = client.lrange(log_key, 0, -1)
@@ -206,10 +224,6 @@ class OpenHandsSDKRunner:
         owns_redis = False  # Track if we need to release Redis reference
         
         if is_coop:
-            from cooperbench.agents.openhands_agent_sdk.messaging import (
-                get_collaboration_system_prompt,
-            )
-            
             # Extract run_id from config or comm_url namespace
             config = config or {}
             if comm_url and "#run:" in comm_url:
@@ -227,24 +241,16 @@ class OpenHandsSDKRunner:
                 
                 redis_url = _get_or_create_redis(run_id, agents, self.timeout)
                 owns_redis = True
-            
-            # Add collaboration instructions to task
-            collab_prompt = get_collaboration_system_prompt(
-                agent_id=agent_id,
-                agents=agents,
-                messaging_enabled=redis_url is not None,
-                git_enabled=git_enabled,
-            )
-            task = task + collab_prompt
 
         try:
-            # Start agent-server in Modal
-            # Pass coop info for messaging tools inside the sandbox
+            # Build coop_info for both sandbox env vars AND agent system prompt
             coop_info = {
                 "redis_url": redis_url,
                 "agent_id": agent_id,
                 "agents": agents or [],
-            } if is_coop and redis_url else None
+                "messaging_enabled": redis_url is not None,
+                "git_enabled": git_enabled,
+            } if is_coop else None
             
             with ModalSandboxContext(oh_image, self.timeout, coop_info=coop_info) as sandbox_url:
 
@@ -262,7 +268,8 @@ class OpenHandsSDKRunner:
                 # Browser tools disabled since we're running headless
                 # Collaboration tools (SendMessage/ReceiveMessage) are always registered
                 # but only active when REDIS_URL env var is set in the sandbox
-                agent = get_default_agent(llm=llm, cli_mode=True)
+                # Pass coop_info to inject collaboration instructions into system prompt
+                agent = get_default_agent(llm=llm, cli_mode=True, coop_info=coop_info)
                 
                 # Connect to remote workspace (agent-server in Modal)
                 workspace = RemoteWorkspace(
@@ -313,8 +320,9 @@ class OpenHandsSDKRunner:
                 # This mirrors mini_swe_agent's pattern of checking inbox before each LLM call
                 if is_coop and redis_url:
                     import redis as redis_client
-                    redis_conn = redis_client.from_url(redis_url)
-                    inbox_key = f"{agent_id}:inbox"
+                    clean_url, prefix = _parse_redis_url(redis_url)
+                    redis_conn = redis_client.from_url(clean_url)
+                    inbox_key = f"{prefix}{agent_id}:inbox"
                     
                     conversation.run(blocking=False)
                     
@@ -411,13 +419,20 @@ class OpenHandsSDKRunner:
                     sent_messages = _retrieve_sent_messages(redis_url, agent_id)
 
         except Exception as e:
-            logger.exception(f"Error running agent: {e}")
-            error = str(e)
-            status = "Error"
+            error_str = str(e)
+            # MaxIterationsReached is expected behavior, not an error
+            if "MaxIterationsReached" in error_str:
+                logger.debug(f"Agent reached max iterations: {e}")
+                status = "Submitted"  # Still consider it submitted
+                error = None  # Not an error condition
+            else:
+                logger.exception(f"Error running agent: {e}")
+                error = error_str
+                status = "Error"
         finally:
             # Release Redis reference (cleanup happens when all agents done)
-            if owns_redis and run_id:
-                _release_redis(run_id)
+            if owns_redis:
+                _release_redis()
 
         return AgentResult(
             status=status,
@@ -455,6 +470,7 @@ class ModalSandboxContext:
         self.coop_info = coop_info
         self._sandbox: modal.Sandbox | None = None
         self._server_proc = None
+        self._coop_info = coop_info  # Alias for clarity
 
     def _collect_credentials(self) -> dict[str, str]:
         """Collect API keys, credentials, and coop info from environment."""
@@ -508,6 +524,120 @@ class ModalSandboxContext:
                 creds["AGENTS"] = ",".join(self.coop_info["agents"])
         
         return creds
+
+    def _get_coop_template(self) -> str:
+        """Get the custom system prompt template for coop mode.
+        
+        This template includes the {{ collaboration }} variable that gets
+        populated with team coordination instructions.
+        """
+        return '''You are OpenHands agent, a helpful AI assistant that can interact with a computer to solve tasks.
+
+<ROLE>
+* Your primary role is to assist users by executing commands, modifying code, and solving technical problems effectively. You should be thorough, methodical, and prioritize quality over speed.
+* If the user asks a question, like "why is X happening", don't try to fix the problem. Just give an answer to the question.
+</ROLE>
+
+{% if collaboration %}
+{{ collaboration }}
+{% endif %}
+
+<MEMORY>
+* Use `AGENTS.md` under the repository root as your persistent memory for repository-specific knowledge and context.
+* Add important insights, patterns, and learnings to this file to improve future task performance.
+* This repository skill is automatically loaded for every conversation and helps maintain context across sessions.
+* For more information about skills, see: https://docs.openhands.dev/overview/skills
+</MEMORY>
+
+<EFFICIENCY>
+* Each action you take is somewhat expensive. Wherever possible, combine multiple actions into a single action, e.g. combine multiple bash commands into one, using sed and grep to edit/view multiple files at once.
+* When exploring the codebase, use efficient tools like find, grep, and git commands with appropriate filters to minimize unnecessary operations.
+</EFFICIENCY>
+
+<FILE_SYSTEM_GUIDELINES>
+* When a user provides a file path, do NOT assume it's relative to the current working directory. First explore the file system to locate the file before working on it.
+* If asked to edit a file, edit the file directly, rather than creating a new file with a different filename.
+* For global search-and-replace operations, consider using `sed` instead of opening file editors multiple times.
+* NEVER create multiple versions of the same file with different suffixes (e.g., file_test.py, file_fix.py, file_simple.py). Instead:
+  - Always modify the original file directly when making changes
+  - If you need to create a temporary file for testing, delete it once you've confirmed your solution works
+  - If you decide a file you created is no longer useful, delete it instead of creating a new version
+* Do NOT include documentation files explaining your changes in version control unless the user explicitly requests it
+* When reproducing bugs or implementing fixes, use a single file rather than creating multiple files with different versions
+</FILE_SYSTEM_GUIDELINES>
+
+<CODE_QUALITY>
+* Write clean, efficient code with minimal comments. Avoid redundancy in comments: Do not repeat information that can be easily inferred from the code itself.
+* When implementing solutions, focus on making the minimal changes needed to solve the problem.
+* Before implementing any changes, first thoroughly understand the codebase through exploration.
+* If you are adding a lot of code to a function or file, consider splitting the function or file into smaller pieces when appropriate.
+* Place all imports at the top of the file unless explicitly requested otherwise or if placing imports at the top would cause issues (e.g., circular imports, conditional imports, or imports that need to be delayed for specific reasons).
+</CODE_QUALITY>
+
+<VERSION_CONTROL>
+* If there are existing git user credentials already configured, use them and add Co-authored-by: openhands <openhands@all-hands.dev> to any commits messages you make. if a git config doesn't exist use "openhands" as the user.name and "openhands@all-hands.dev" as the user.email by default, unless explicitly instructed otherwise.
+* Exercise caution with git operations. Do NOT make potentially dangerous changes (e.g., pushing to main, deleting repositories) unless explicitly asked to do so.
+* When committing changes, use `git status` to see all modified files, and stage all files necessary for the commit. Use `git commit -a` whenever possible.
+* Do NOT commit files that typically shouldn't go into version control (e.g., node_modules/, .env files, build directories, cache files, large binaries) unless explicitly instructed by the user.
+* If unsure about committing certain files, check for the presence of .gitignore files or ask the user for clarification.
+* When running git commands that may produce paged output (e.g., `git diff`, `git log`, `git show`), use `git --no-pager <command>` or set `GIT_PAGER=cat` to prevent the command from getting stuck waiting for interactive input.
+</VERSION_CONTROL>
+
+<PULL_REQUESTS>
+* **Important**: Do not push to the remote branch and/or start a pull request unless explicitly asked to do so.
+* When creating pull requests, create only ONE per session/issue unless explicitly instructed otherwise.
+* When working with an existing PR, update it with new commits rather than creating additional PRs for the same issue.
+* When updating a PR, preserve the original PR title and purpose, updating description only when necessary.
+</PULL_REQUESTS>
+
+<PROBLEM_SOLVING_WORKFLOW>
+1. EXPLORATION: Thoroughly explore relevant files and understand the context before proposing solutions
+2. ANALYSIS: Consider multiple approaches and select the most promising one
+3. TESTING:
+   * For bug fixes: Create tests to verify issues before implementing fixes
+   * For new features: Consider test-driven development when appropriate
+   * Do NOT write tests for documentation changes, README updates, configuration files, or other non-functionality changes
+   * Do not use mocks in tests unless strictly necessary and justify their use when they are used. You must always test real code paths in tests, NOT mocks.
+   * If the repository lacks testing infrastructure and implementing tests would require extensive setup, consult with the user before investing time in building testing infrastructure
+   * If the environment is not set up to run tests, consult with the user first before investing time to install all dependencies
+4. IMPLEMENTATION:
+   * Make focused, minimal changes to address the problem
+   * Always modify existing files directly rather than creating new versions with different suffixes
+   * If you create temporary files for testing, delete them after confirming your solution works
+5. VERIFICATION: If the environment is set up to run tests, test your implementation thoroughly, including edge cases. If the environment is not set up to run tests, consult with the user first before investing time to run tests.
+</PROBLEM_SOLVING_WORKFLOW>
+
+<EXTERNAL_SERVICES>
+* When interacting with external services like GitHub, GitLab, or Bitbucket, use their respective APIs instead of browser-based interactions whenever possible.
+* Only resort to browser-based interactions with these services if specifically requested by the user or if the required operation cannot be performed via API.
+</EXTERNAL_SERVICES>
+
+<ENVIRONMENT_SETUP>
+* When user asks you to run an application, don't stop if the application is not installed. Instead, please install the application and run the command again.
+* If you encounter missing dependencies:
+  1. First, look around in the repository for existing dependency files (requirements.txt, pyproject.toml, package.json, Gemfile, etc.)
+  2. If dependency files exist, use them to install all dependencies at once (e.g., `pip install -r requirements.txt`, `npm install`, etc.)
+  3. Only install individual packages directly if no dependency files are found or if only specific packages are needed
+* Similarly, if you encounter missing dependencies for essential tools requested by the user, install them when possible.
+</ENVIRONMENT_SETUP>
+
+<TROUBLESHOOTING>
+* If you've made repeated attempts to solve a problem but tests still fail or the user reports it's still broken:
+  1. Step back and reflect on 5-7 different possible sources of the problem
+  2. Assess the likelihood of each possible cause
+  3. Methodically address the most likely causes, starting with the highest probability
+  4. Explain your reasoning process in your response to the user
+* When you run into any major issue while executing a plan from the user, please don't try to directly work around it. Instead, propose a new plan and confirm with the user before proceeding.
+</TROUBLESHOOTING>
+
+<PROCESS_MANAGEMENT>
+* When terminating processes:
+  - Do NOT use general keywords with commands like `pkill -f server` or `pkill -f python` as this might accidentally kill other important servers or processes
+  - Always use specific keywords that uniquely identify the target process
+  - Prefer using `ps aux` to find the exact process ID (PID) first, then kill that specific PID
+  - When possible, use more targeted approaches like finding the PID from a pidfile or using application-specific shutdown commands
+</PROCESS_MANAGEMENT>
+'''
 
     def __enter__(self) -> str:
         """Start sandbox, run agent-server, and return the tunnel URL."""
@@ -602,6 +732,13 @@ exec /opt/agent-server-venv/bin/python /tmp/agent_wrapper.py
         wrapper_b64 = base64.b64encode(wrapper_script.encode()).decode()
         write_wrapper = self._sandbox.exec("bash", "-c", f"echo '{wrapper_b64}' | base64 -d > /tmp/agent_wrapper.py")
         write_wrapper.wait()
+        
+        # Write the custom coop system prompt template to the sandbox (if coop mode)
+        if self._coop_info:
+            coop_template = self._get_coop_template()
+            template_b64 = base64.b64encode(coop_template.encode()).decode()
+            write_template = self._sandbox.exec("bash", "-c", f"echo '{template_b64}' | base64 -d > /tmp/system_prompt_coop.j2")
+            write_template.wait()
         
         # Start the agent-server manually (since we cleared the entrypoint)
         self._server_proc = self._sandbox.exec(

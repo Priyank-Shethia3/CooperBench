@@ -82,18 +82,96 @@ def get_default_condenser(llm: LLM) -> CondenserBase:
     return condenser
 
 
+def get_coop_system_prompt(agent_id: str, teammates: list[str], messaging_enabled: bool, git_enabled: bool) -> str:
+    """Generate the collaboration section for the system prompt."""
+    # Intro section (mirrors mini.yaml lines 4-8)
+    all_agents = [agent_id] + teammates
+    collab_section = f"""You are {agent_id} working as a team with: {', '.join(all_agents)}.
+You are all working on related features in the same codebase. Each agent has their own workspace.
+"""
+    if git_enabled:
+        collab_section += """A shared git remote called "team" is available for code sharing between agents.
+"""
+    if messaging_enabled:
+        collab_section += """Use send_message to coordinate.
+"""
+
+    # Collaboration block (mirrors mini.yaml lines 23-46)
+    collab_section += """
+<collaboration>
+Each agent has their own workspace. At the end, all agents' changes will be merged together.
+**Important**: Coordinate to avoid merge conflicts - your patches must cleanly combine!
+"""
+    if git_enabled:
+        collab_section += f"""
+## Git
+A shared remote called "team" is configured. Your branch is `{agent_id}`.
+Teammates' branches are at `team/<name>` (e.g., `team/{teammates[0] if teammates else 'agent_0'}`).
+
+Use the terminal tool:
+- Push: `git push team {agent_id}`
+- Fetch: `git fetch team`
+"""
+    if messaging_enabled:
+        collab_section += f"""
+## Messaging (coordinate with teammates)
+Send messages to teammates. Messages appear automatically.
+Use the send_message tool:
+- recipient: agent name (e.g., "{teammates[0] if teammates else 'agent_0'}")
+- content: your message
+
+Messages from teammates appear as: [Message from <agent_name>]: ...
+"""
+    collab_section += "</collaboration>\n"
+    return collab_section
+
+
 def get_default_agent(
     llm: LLM,
     cli_mode: bool = False,
+    coop_info: dict | None = None,
 ) -> Agent:
+    """Get a configured default agent.
+    
+    Args:
+        llm: The LLM to use
+        cli_mode: Whether running in CLI mode (disables browser tools)
+        coop_info: Optional collaboration info dict with keys:
+            - agent_id: This agent's ID
+            - agents: List of all agent IDs in the team
+            - messaging_enabled: Whether messaging is available
+            - git_enabled: Whether git sharing is available
+    """
     tools = get_default_tools(
         # Disable browser tools in CLI mode
         enable_browser=not cli_mode,
     )
+    
+    # Build system prompt kwargs
+    system_prompt_kwargs = {"cli_mode": cli_mode}
+    
+    # Add collaboration instructions to system prompt if in coop mode
+    if coop_info and coop_info.get("agents") and len(coop_info["agents"]) > 1:
+        agent_id = coop_info.get("agent_id", "agent")
+        agents = coop_info["agents"]
+        teammates = [a for a in agents if a != agent_id]
+        messaging_enabled = coop_info.get("messaging_enabled", True)
+        git_enabled = coop_info.get("git_enabled", False)
+        
+        collab_section = get_coop_system_prompt(agent_id, teammates, messaging_enabled, git_enabled)
+        system_prompt_kwargs["collaboration"] = collab_section
+    
+    # Use custom template if in coop mode (template has {{ collaboration }} variable)
+    system_prompt_filename = None
+    if coop_info and coop_info.get("agents") and len(coop_info["agents"]) > 1:
+        # Use the custom template written to /tmp in the sandbox
+        system_prompt_filename = "/tmp/system_prompt_coop.j2"
+    
     agent = Agent(
         llm=llm,
         tools=tools,
-        system_prompt_kwargs={"cli_mode": cli_mode},
+        system_prompt_filename=system_prompt_filename or "system_prompt.j2",
+        system_prompt_kwargs=system_prompt_kwargs,
         condenser=get_default_condenser(
             llm=llm.model_copy(update={"usage_id": "condenser"})
         ),
