@@ -395,7 +395,8 @@ class GCPEnvironment:
             try:
                 self._wait_for_operation(operation.name, timeout=120)
             except TimeoutError:
-                self.logger.warning(f"VM deletion timed out, may still be deleting: {self._vm_name}")
+                # VM deletion initiated, will complete asynchronously
+                pass
 
             self._vm_created = False
             self._container_started = False

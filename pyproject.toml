@@ -43,6 +43,8 @@ classifiers = [
 ]
 dependencies = [
     "docker>=7.0",
+    "google-auth>=2.48.0",
+    "google-cloud-aiplatform>=1.135.0",
     "jinja2>=3.0",
     "litellm>=1.0",
     "modal>=0.70",
@@ -68,6 +70,28 @@ gcp = [
     "google-cloud-compute>=1.0",
     "google-cloud-storage>=2.0",
 ]
+openhands = [
+    "openhands-sdk",
+    "openhands-tools",
+    "openhands-workspace",
+    # OpenHands SDK dependencies (v1.10.0)
+    "deprecation>=2.1.0",
+    "fastmcp>=2.11.3",
+    "filelock>=3.20.1",
+    "httpx>=0.27.0",
+    "python-frontmatter>=1.1.0",
+    "python-json-logger>=3.3.0",
+    "websockets>=12",
+    "lmnr>=0.7.24",
+    # OpenHands Tools dependencies
+    "bashlex>=0.18",
+    "binaryornot>=0.4.4",
+    "cachetools",
+    "libtmux>=0.53.0",
+    "browser-use>=0.8.0",
+    "func-timeout>=4.3.5",
+    "tom-swe>=1.0.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
@@ -75,7 +99,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.4",
 ]
-all = ["cooperbench[swe-agent,gcp,dev]"]
+all = ["cooperbench[swe-agent,gcp,openhands,dev]"]
 
 [project.scripts]
 cooperbench = "cooperbench.cli:main"
@@ -112,7 +136,8 @@ packages = ["src/cooperbench"]
 line-length = 120
 target-version = "py312"
 exclude = [
-    "src/cooperbench/agents/swe_agent/",  # vendored code
+    "src/cooperbench/agents/swe_agent/",  # third-party code
+    "src/cooperbench/agents/openhands_agent_sdk/",  # adapted from OpenHands SDK
 ]
 
 [tool.ruff.lint]
@@ -136,7 +161,7 @@ ignore_missing_imports = true
 check_untyped_defs = false
 disallow_untyped_defs = false
 disable_error_code = ["override", "misc", "no-any-return", "arg-type", "call-arg", "operator", "assignment", "call-overload", "index", "import-untyped", "dict-item", "var-annotated", "union-attr", "empty-body", "return-value", "attr-defined"]
-exclude = ["tests/", "src/cooperbench/agents/swe_agent/"]
+exclude = ["tests/", "src/cooperbench/agents/swe_agent/", "src/cooperbench/agents/openhands_agent_sdk/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -162,3 +187,9 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+[tool.uv.sources]
+cooperbench = { workspace = true }
+openhands-sdk = { path = "src/cooperbench/agents/openhands_agent_sdk/openhands-sdk", editable = true }
+openhands-tools = { path = "src/cooperbench/agents/openhands_agent_sdk/openhands-tools", editable = true }
+openhands-workspace = { path = "src/cooperbench/agents/openhands_agent_sdk/openhands-workspace", editable = true }

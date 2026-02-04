@@ -33,6 +33,9 @@ class AgentResult:
     messages: list[dict[str, Any]] = field(default_factory=list)
     """Full conversation trajectory for analysis."""
 
+    sent_messages: list[dict[str, Any]] = field(default_factory=list)
+    """Inter-agent messages sent during the run (for tool-based agents)."""
+
     error: str | None = None
     """Error message if status is 'Error'."""
 
@@ -78,7 +81,29 @@ class AgentRunner(Protocol):
 
 
 # Import registry functions for convenience (must be after class definitions to avoid circular imports)
-from cooperbench.agents.registry import get_runner, list_agents, register  # noqa: E402
+from cooperbench.agents.registry import get_runner, list_agents, register  # noqa: E402, I001
+
+
+# Agent framework shorthands for experiment naming
+# Add your agent's shorthand here when registering a new adapter
+AGENT_SHORTHANDS = {
+    "mini_swe_agent": "msa",
+    "swe_agent": "sw",
+    "openhands_sdk": "oh",
+}
+
+
+def get_agent_shorthand(agent_name: str) -> str:
+    """Get the shorthand for an agent framework.
+
+    Args:
+        agent_name: Full agent name (e.g., "mini_swe_agent")
+
+    Returns:
+        Shorthand (e.g., "msa") or first 2 chars if not registered
+    """
+    return AGENT_SHORTHANDS.get(agent_name, agent_name[:2])
+
 
 __all__ = [
     "AgentResult",
@@ -86,4 +111,6 @@ __all__ = [
     "get_runner",
     "list_agents",
     "register",
+    "AGENT_SHORTHANDS",
+    "get_agent_shorthand",
 ]
