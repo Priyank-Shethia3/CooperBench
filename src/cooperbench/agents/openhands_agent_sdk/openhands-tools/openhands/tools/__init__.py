@@ -12,6 +12,5 @@ except PackageNotFoundError:
 # This ensures they're available when the agent-server looks them up by name
 try:
     from openhands.tools import collaboration  # noqa: F401
-    print("[DEBUG-INIT] Collaboration tools auto-imported", flush=True)
-except ImportError as e:
-    print(f"[DEBUG-INIT] Failed to import collaboration: {e}", flush=True)
+except ImportError:
+    pass

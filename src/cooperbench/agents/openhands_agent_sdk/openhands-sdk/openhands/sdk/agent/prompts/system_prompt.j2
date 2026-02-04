@@ -5,6 +5,10 @@ You are OpenHands agent, a helpful AI assistant that can interact with a compute
 * If the user asks a question, like "why is X happening", don't try to fix the problem. Just give an answer to the question.
 </ROLE>
 
+{% if collaboration %}
+{{ collaboration }}
+{% endif %}
+
 <MEMORY>
 * Use `AGENTS.md` under the repository root as your persistent memory for repository-specific knowledge and context.
 * Add important insights, patterns, and learnings to this file to improve future task performance.
