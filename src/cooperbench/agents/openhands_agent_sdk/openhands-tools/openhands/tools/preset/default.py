@@ -103,8 +103,11 @@ def get_coop_system_prompt(agent_id: str, teammates: list[str], messaging_enable
 """
     if git_enabled:
         collab_section += f"""
-* Push your branch: `git push team {agent_id}`
-* Fetch teammate's branch: `git fetch team`
+## Git
+A shared remote called `team` is configured. Your branch is `{agent_id}`.
+Teammates' branches are at `team/<name>` (e.g., `team/{teammate_name}`).
+* Push: `git push team {agent_id}`
+* Fetch: `git fetch team`
 """
     collab_section += """
 </collaboration>

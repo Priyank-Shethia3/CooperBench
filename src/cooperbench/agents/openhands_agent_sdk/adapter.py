@@ -36,6 +36,12 @@ _shared_redis: Any = None  # ModalRedisServer instance
 _redis_lock = threading.Lock()
 _redis_refcount: int = 0  # Total number of active agents using Redis
 
+# Module-level shared Git server for coop runs with git enabled
+# Unlike Redis (shared across all runs), Git server is per-run to isolate repos
+_git_servers: dict[str, Any] = {}  # run_id -> ModalGitServer
+_git_lock = threading.Lock()
+_git_refcounts: dict[str, int] = {}  # run_id -> refcount
+
 
 def _get_or_create_redis(run_id: str, agents: list[str], timeout: int = 3600) -> str:
     """Get or create a shared ModalRedisServer for coop runs.
@@ -82,6 +88,57 @@ def _release_redis() -> None:
             except Exception:
                 pass  # Ignore cleanup errors
             _shared_redis = None
+
+
+def _get_or_create_git_server(run_id: str, agents: list[str], timeout: int = 3600) -> str:
+    """Get or create a ModalGitServer for a specific run.
+    
+    Thread-safe: First caller for a run_id creates the server, others reuse it.
+    Each run gets its own git server (unlike Redis which is shared).
+    
+    Returns:
+        Git URL (e.g., git://host:port/repo.git)
+    """
+    global _git_servers, _git_refcounts
+    from cooperbench.agents.openhands_agent_sdk.connectors import ModalGitServer
+    
+    with _git_lock:
+        if run_id not in _git_servers:
+            app = modal.App.lookup("cooperbench-openhands", create_if_missing=True)
+            _git_servers[run_id] = ModalGitServer.create(
+                app=app,
+                run_id=run_id,
+                agents=agents,
+                timeout=timeout,
+            )
+            _git_refcounts[run_id] = 0
+        
+        _git_refcounts[run_id] += 1
+        return _git_servers[run_id].url
+
+
+def _release_git_server(run_id: str) -> None:
+    """Release a reference to a run's git server.
+    
+    When refcount reaches 0, the server is cleaned up.
+    """
+    global _git_servers, _git_refcounts
+    
+    with _git_lock:
+        if run_id not in _git_refcounts:
+            return
+        
+        _git_refcounts[run_id] -= 1
+        
+        if _git_refcounts[run_id] <= 0:
+            if run_id in _git_servers:
+                try:
+                    _git_servers[run_id].cleanup()
+                except Exception:
+                    pass  # Ignore cleanup errors
+                del _git_servers[run_id]
+            if run_id in _git_refcounts:
+                del _git_refcounts[run_id]
 
 
 def _needs_modal_redis(comm_url: str | None) -> bool:
@@ -172,6 +229,51 @@ class OpenHandsSDKRunner:
             return f"{base}:{tag}-oh"
         # No tag specified
         return f"{image}-oh"
+    
+    def _setup_git_remote(self, workspace, git_url: str, agent_id: str) -> None:
+        """Configure git remote in the agent's sandbox for collaboration.
+        
+        Sets up the 'team' remote pointing to the shared git server,
+        creates an agent-specific branch, and pushes the initial state.
+        
+        Args:
+            workspace: RemoteWorkspace instance
+            git_url: Git server URL (e.g., git://host:port/repo.git)
+            agent_id: This agent's identifier
+        """
+        REMOTE_NAME = "team"
+        
+        # Configure git user (needed for commits)
+        workspace.execute_command('git config user.email "agent@cooperbench.local"', cwd="/workspace/repo", timeout=10.0)
+        workspace.execute_command(f'git config user.name "{agent_id}"', cwd="/workspace/repo", timeout=10.0)
+        
+        # Add shared remote (or update if exists)
+        result = workspace.execute_command(f"git remote add {REMOTE_NAME} {git_url}", cwd="/workspace/repo", timeout=10.0)
+        if result.exit_code != 0:
+            # Remote might already exist, update URL
+            workspace.execute_command(f"git remote set-url {REMOTE_NAME} {git_url}", cwd="/workspace/repo", timeout=10.0)
+        
+        # Create agent's branch
+        workspace.execute_command(f"git checkout -b {agent_id}", cwd="/workspace/repo", timeout=10.0)
+        
+        # Push initial state (first agent initializes the server)
+        # Use --force in case branch exists from a previous run
+        result = workspace.execute_command(
+            f"git push -u {REMOTE_NAME} {agent_id} --force",
+            cwd="/workspace/repo",
+            timeout=30.0,
+        )
+        if result.exit_code != 0:
+            logger.warning(f"Initial git push failed: {result.stderr}")
+        
+        # Also push main/master as base reference
+        workspace.execute_command(
+            f"git push {REMOTE_NAME} HEAD:refs/heads/main --force 2>/dev/null || true",
+            cwd="/workspace/repo",
+            timeout=30.0,
+        )
+        
+        logger.debug(f"Git setup complete for {agent_id} with remote {git_url}")
 
     def run(
         self,
@@ -219,10 +321,12 @@ class OpenHandsSDKRunner:
         error = None
         
         # Determine if this is a coop run
-        is_coop = messaging_enabled and agents and len(agents) > 1
+        is_coop = (messaging_enabled or git_enabled) and agents and len(agents) > 1
         redis_url = comm_url
+        git_url = git_server_url
         run_id = None
         owns_redis = False  # Track if we need to release Redis reference
+        owns_git = False  # Track if we need to release Git server reference
         
         if is_coop:
             # Extract run_id from config or comm_url namespace
@@ -233,24 +337,30 @@ class OpenHandsSDKRunner:
             else:
                 run_id = config.get("run_id")
             
+            # Generate run_id if not provided
+            if not run_id:
+                import uuid
+                run_id = uuid.uuid4().hex[:8]
+            
             # Create Modal Redis if needed (localhost not reachable from Modal)
-            if _needs_modal_redis(comm_url):
-                if not run_id:
-                    # Generate run_id if not provided
-                    import uuid
-                    run_id = uuid.uuid4().hex[:8]
-                
+            if messaging_enabled and _needs_modal_redis(comm_url):
                 redis_url = _get_or_create_redis(run_id, agents, self.timeout)
                 owns_redis = True
+            
+            # Create Modal Git server if git is enabled and no URL provided
+            if git_enabled and not git_server_url:
+                git_url = _get_or_create_git_server(run_id, agents, self.timeout)
+                owns_git = True
 
         try:
             # Build coop_info for both sandbox env vars AND agent system prompt
             coop_info = {
                 "redis_url": redis_url,
+                "git_url": git_url,
                 "agent_id": agent_id,
                 "agents": agents or [],
                 "messaging_enabled": redis_url is not None,
-                "git_enabled": git_enabled,
+                "git_enabled": git_enabled and git_url is not None,
             } if is_coop else None
             
             with ModalSandboxContext(oh_image, self.timeout, coop_info=coop_info) as sandbox_url:
@@ -277,6 +387,14 @@ class OpenHandsSDKRunner:
                     host=sandbox_url,
                     working_dir="/workspace/repo",
                 )
+                
+                # Set up git remote if git collaboration is enabled
+                if coop_info and coop_info.get("git_enabled") and coop_info.get("git_url"):
+                    self._setup_git_remote(
+                        workspace=workspace,
+                        git_url=coop_info["git_url"],
+                        agent_id=agent_id,
+                    )
 
                 # Callback to collect events
                 def event_callback(event):
@@ -377,6 +495,9 @@ class OpenHandsSDKRunner:
             # Release Redis reference (cleanup happens when all agents done)
             if owns_redis:
                 _release_redis()
+            # Release Git server reference
+            if owns_git and run_id:
+                _release_git_server(run_id)
 
         return AgentResult(
             status=status,
@@ -398,7 +519,7 @@ class ModalSandboxContext:
     Credentials are passed to the sandbox via modal.Secret:
     - GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY from environment
     - Google Cloud credentials from GOOGLE_APPLICATION_CREDENTIALS file
-    - For coop mode: REDIS_URL, AGENT_ID, AGENTS (for SendMessageTool)
+    - For coop mode: REDIS_URL, GIT_URL, AGENT_ID, AGENTS (for collaboration tools)
     """
 
     def __init__(self, image_name: str, timeout: int, coop_info: dict | None = None):
@@ -458,10 +579,12 @@ class ModalSandboxContext:
                     except json.JSONDecodeError:
                         pass
         
-        # Add coop info for SendMessageTool
+        # Add coop info for collaboration tools
         if self.coop_info:
             if self.coop_info.get("redis_url"):
                 creds["REDIS_URL"] = self.coop_info["redis_url"]
+            if self.coop_info.get("git_url"):
+                creds["GIT_URL"] = self.coop_info["git_url"]
             if self.coop_info.get("agent_id"):
                 creds["AGENT_ID"] = self.coop_info["agent_id"]
             if self.coop_info.get("agents"):

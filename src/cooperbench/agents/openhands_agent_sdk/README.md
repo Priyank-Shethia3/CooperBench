@@ -49,8 +49,7 @@ We built a **minimal adapter** that leverages the OpenHands SDK's native archite
 | File | Purpose |
 |------|---------|
 | `adapter.py` | CooperBench adapter using `RemoteConversation` + `RemoteWorkspace` |
-| `messaging.py` | Generates collaboration prompts for coop mode |
-| `connectors/` | Infrastructure components (`ModalRedisServer`) |
+| `connectors/` | Infrastructure components (`ModalRedisServer`, `ModalGitServer`) |
 | `docker/Dockerfile.agent-server` | Layers agent-server onto CooperBench task images |
 | `docker/build_agent_image.sh` | Builds multi-platform images (`linux/amd64`, `linux/arm64`) |
 | `openhands-sdk/` | Local copy of SDK (for customizations) |
@@ -169,11 +168,11 @@ solo-oh-gemini-2-5-flash-llama-index-17244
 
 ## Collaboration Support
 
-The adapter supports multi-agent collaboration via Redis messaging. **Fully decoupled**: the adapter manages its own infrastructure internally—the CooperBench orchestrator just passes flags.
+The adapter supports multi-agent collaboration via Redis messaging and Git code sharing. **Fully decoupled**: the adapter manages its own infrastructure internally—the CooperBench orchestrator just passes flags.
 
 ### Architecture
 
-Everything runs in Modal - no local Redis needed:
+Everything runs in Modal - no local Redis or Git server needed:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -195,7 +194,16 @@ Everything runs in Modal - no local Redis needed:
 │  │                       │   │                           │          │
 │  │  - ReceiveMessageTool │   │  - ReceiveMessageTool     │          │
 │  │    pops from Redis    │   │    pops from Redis        │          │
-│  └───────────────────────┘   └───────────────────────────┘          │
+│  └───────────┬───────────┘   └─────────────┬─────────────┘          │
+│              │                             │                        │
+│              │  git push/pull              │  git push/pull         │
+│              ▼                             ▼                        │
+│  ┌────────────────────────────────────────────────────────────┐     │
+│  │            ModalGitServer (per-run sandbox)                │     │
+│  │  - git-daemon with receive-pack enabled                    │     │
+│  │  - Each run gets isolated bare repo                        │     │
+│  │  - Agents push to their branch, fetch teammates' branches  │     │
+│  └────────────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────────┘
 
 Coordination via module-level registry with thread-safe locking.
@@ -212,32 +220,43 @@ agent.run(
     image=image,
     agents=["agent_0", "agent_1"],
     messaging_enabled=True,
-    # comm_url can be None or localhost - adapter creates Modal Redis
+    git_enabled=True,
+    # comm_url/git_server_url can be None - adapter creates Modal servers
 )
 
 # Internally, adapter:
-# 1. Detects coop mode (multiple agents + messaging_enabled)
-# 2. Creates ModalRedisServer (first agent, thread-safe)
-# 3. Passes Redis URL to sandbox for SendMessage/ReceiveMessage tools
-# 4. Releases reference when done (last agent cleans up)
+# 1. Detects coop mode (multiple agents + messaging_enabled or git_enabled)
+# 2. Creates ModalRedisServer for messaging (first agent, thread-safe)
+# 3. Creates ModalGitServer for code sharing (per-run, thread-safe)
+# 4. Sets up 'team' remote in each agent's sandbox
+# 5. Passes URLs to sandbox via env vars
+# 6. Releases references when done (last agent cleans up)
 ```
 
 This means:
-- **No external Redis needed** - adapter creates its own
+- **No external Redis or Git server needed** - adapter creates its own
 - **No orchestrator changes** - just pass standard flags
 - **Portable** - can switch to different backends later
 
 ### Running Coop Mode
 
 ```bash
-# Run with 2 agents on collaborative tasks
+# Run with 2 agents on collaborative tasks (messaging only)
+cooperbench run \
+  --setting coop \
+  -a openhands_sdk \
+  -m vertex_ai/gemini-2.5-flash \
+  -r llama_index_task \
+  -t 17244
+
+# Run with git collaboration enabled
 cooperbench run \
   --setting coop \
   -a openhands_sdk \
   -m vertex_ai/gemini-2.5-flash \
   -r llama_index_task \
   -t 17244 \
-  --agents 2
+  --git
 ```
 
 ### How Messaging Works
@@ -248,19 +267,32 @@ cooperbench run \
 
 3. **Collaboration Prompt**: Task prompt is augmented with instructions explaining the messaging tools.
 
+### How Git Collaboration Works
+
+1. **Git Server Creation**: When `git_enabled=True`, the adapter creates a `ModalGitServer` sandbox running `git-daemon` with receive-pack enabled.
+
+2. **Remote Setup**: Each agent's sandbox is configured with a `team` remote pointing to the shared git server. Each agent gets their own branch (e.g., `agent_0`, `agent_1`).
+
+3. **Code Sharing**: Agents can push their changes and fetch teammates' branches:
+   ```bash
+   git push team agent_0        # Push your changes
+   git fetch team               # Fetch all branches
+   git diff HEAD..team/agent_1  # See teammate's changes
+   git merge team/agent_1       # Merge teammate's work
+   ```
+
+4. **System Prompt**: Agents are instructed about the `team` remote and their branch name.
+
 ### Environment Variables in Sandbox
 
-The adapter passes these to each sandbox for messaging tools:
+The adapter passes these to each sandbox for collaboration tools:
 
 | Variable | Description |
 |----------|-------------|
 | `REDIS_URL` | Redis URL (tunnel to ModalRedisServer) |
+| `GIT_URL` | Git URL (tunnel to ModalGitServer) |
 | `AGENT_ID` | This agent's ID |
 | `AGENTS` | Comma-separated list of all agent IDs |
-
-### Limitations
-
-- **Git collaboration** (`git_enabled=True`) is not yet supported. Agents cannot push/pull to shared remotes.
 
 ## Upstream SDK
 
