@@ -81,7 +81,7 @@ class AgentRunner(Protocol):
 
 
 # Import registry functions for convenience (must be after class definitions to avoid circular imports)
-from cooperbench.agents.registry import get_runner, list_agents, register  # noqa: E402
+from cooperbench.agents.registry import get_runner, list_agents, register  # noqa: E402, I001
 
 
 # Agent framework shorthands for experiment naming

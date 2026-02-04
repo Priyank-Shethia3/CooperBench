@@ -306,8 +306,6 @@ def _extract_conversation(results: dict, agents: list[str]) -> list[dict]:
         # Method 2: Parse from messages list (mini_swe_agent bash commands + OpenHands events)
         for msg in r.get("messages", []):
             content = msg.get("content", "")
-            # Also check event field for OpenHands events
-            event = msg.get("event", "")
             ts = msg.get("timestamp")
 
             # Outgoing: agent sent a message via send_message command (bash format)
